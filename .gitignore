@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ai-inference/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Models & Large Files (don't commit these!)
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.pth
+*.ckpt
+*.h5
+models/
+checkpoints/
+*.nsys-rep
+*.sqlite
+*.qdrep
+
+# Data
+data/
+datasets/
+*.csv
+*.parquet
+*.arrow
+# Except result CSVs (do commit these!)
+!**/results/*.csv
+!**/benchmarks/*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+wandb/
+
+# Environment variables
+.env
+.env.local
+
+# CUDA/GPU specific
+*.cubin
+*.fatbin
