@@ -11,6 +11,10 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
+# FIX: Set pad_token to eos_token
+tokenizer.pad_token = tokenizer.eos_token
+print(f"Pad token set to: {tokenizer.pad_token}")
+
 # Test different batch sizes
 batch_sizes = [1, 2, 4, 8, 16, 32]
 results = []
