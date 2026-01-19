@@ -191,7 +191,7 @@ plt.title(f'Model Residuals (R² = {r_squared:.6f})', fontsize=14, fontweight='b
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.savefig('results/plots/memory_model_residuals.png', dpi=150, bbox_inches='tight')
-print("✓ Saved: results/plots/memory_model_residuals.png")
+print("✓ Saved: results/plots/memory_model_rmdesiduals.png")
 
 plt.close('all')
 
