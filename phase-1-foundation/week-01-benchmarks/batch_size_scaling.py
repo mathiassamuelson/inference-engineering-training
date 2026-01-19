@@ -16,7 +16,7 @@ tokenizer.pad_token = tokenizer.eos_token
 print(f"Pad token set to: {tokenizer.pad_token}")
 
 # Test different batch sizes
-batch_sizes = [1, 2, 4, 8, 16, 32]
+batch_sizes = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 results = []
 
 for batch_size in batch_sizes:
