@@ -193,15 +193,3 @@
 * Framework for AI feasibility assessment  
 * Can translate technical constraints into product decisions
 
----
-
-## **Your Advantage**
-
-With your platform/infrastructure PM background, you're perfectly positioned to understand the **operational realities** that many AI engineers and PMs miss:
-
-* Scale economics (you've managed 30+ carrier deployments)  
-* SLA implications (20M+ end users)  
-* Platform reliability patterns (10x growth migrations)
-
-This training plan turns your inference rig into a **living laboratory** where you can validate every product claim and cost model with real data—something most AI PMs can't do.
-

@@ -140,8 +140,8 @@ print(f"  ✓ Total Memory: {(torch.cuda.memory_allocated(0) + torch.cuda.memory
 
 # Save results
 df = pd.DataFrame(results)
-os.makedirs('benchmarks', exist_ok=True)
-df.to_csv('benchmarks/week1_baseline.csv', index=False)
+os.makedirs('results', exist_ok=True)
+df.to_csv('results/week1_baseline.csv', index=False)
 
 # Print summary
 print("\n" + "="*60)
@@ -164,4 +164,4 @@ if dual_speed < fp16_speed:
     print("\nNote: Dual GPU is SLOWER - this is expected for small models")
     print("Reason: Communication overhead > computation savings for 3B params")
 
-print(f"\nResults saved to: benchmarks/week1_baseline.csv")
+print(f"\nResults saved to: results/week1_baseline.csv")

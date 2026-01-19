@@ -1,8 +1,8 @@
-# AI Infrastructure Training: From Product Manager to AI Engineer
+# AI Infrastructure Training: From Product Architect to AI Engineer or AI Product Manager
 
 **Goal:** Master NVIDIA's AI stack through hands-on learning with a 4x RTX 3090 inference platform
 
-**Background:** Senior Product Manager with 13+ years in carrier-scale infrastructure, transitioning to AI engineering/product management
+**Background:** Principal Product Architect with 13+ years in carrier-scale infrastructure, transitioning to AI engineering/product management
 
 **Hardware:** 4x NVIDIA RTX 3090 (96GB total VRAM) | Ubuntu 24.04 | CUDA 12.x
 
