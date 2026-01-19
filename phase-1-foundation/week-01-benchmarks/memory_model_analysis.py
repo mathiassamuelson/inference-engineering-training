@@ -47,4 +47,4 @@ print("------|-----------|--------|-------")
 for i, row in df.iterrows():
     predicted = memory_model(row['batch_size'], base_memory, kv_per_sample)
     error = abs(predicted - row['peak_memory']) / row['peak_memory'] * 100
-    print(f"{row['batch_size']:5d} | {predicted:7.2f} GB | {row['peak_memory']:6.2f} GB | {error:5.2f}%")
+    print(f"{int(row['batch_size']):5d} | {predicted:7.2f} GB | {row['peak_memory']:6.2f} GB | {error:5.2f}%")
