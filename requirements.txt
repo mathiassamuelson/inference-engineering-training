@@ -8,6 +8,11 @@ bitsandbytes>=0.41.0
 tensorrt>=9.0.0
 nvidia-tensorrt>=9.0.0
 
+# ONNX (for TensorRT conversion pipeline)
+onnx>=1.15.0
+onnxscript>=0.1.0
+onnxruntime>=1.16.0
+
 # Inference Servers
 vllm>=0.2.0
 tritonclient[all]>=2.40.0

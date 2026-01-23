@@ -5,9 +5,10 @@ import numpy as np
 import time
 import os
 
-print("="*70)
+print("=" * 70)
 print("SIMPLE TENSORRT CONVERSION TEST")
-print("="*70)
+print("=" * 70)
+
 
 # Define a simple neural network
 class SimpleNet(nn.Module):
@@ -17,7 +18,7 @@ class SimpleNet(nn.Module):
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(1024, 512)
         self.fc3 = nn.Linear(512, 10)
-    
+
     def forward(self, x):
         x = self.fc1(x)
         x = self.relu(x)
@@ -26,18 +27,21 @@ class SimpleNet(nn.Module):
         x = self.fc3(x)
         return x
 
+
 print("\n[1/6] Creating PyTorch Model")
-print("-"*70)
+print("-" * 70)
 
 model = SimpleNet().cuda().eval()
-print(f"✓ Model created: {sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters")
+print(
+    f"✓ Model created: {sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters"
+)
 
 # Export to ONNX (intermediate format for TensorRT)
 print("\n[2/6] Exporting to ONNX")
-print("-"*70)
+print("-" * 70)
 
-os.makedirs('results', exist_ok=True)
-onnx_path = 'results/simple_model.onnx'
+os.makedirs("results", exist_ok=True)
+onnx_path = "results/simple_model.onnx"
 
 dummy_input = torch.randn(1, 512).cuda()
 
@@ -46,36 +50,38 @@ try:
         model,
         dummy_input,
         onnx_path,
-        input_names=['input'],
-        output_names=['output'],
-        dynamic_axes={
-            'input': {0: 'batch_size'},
-            'output': {0: 'batch_size'}
-        },
-        opset_version=17
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+        opset_version=17,
+        dynamo=False,  # Use legacy exporter to avoid dynamic_axes warning
     )
     print(f"✓ ONNX export successful: {onnx_path}")
 except Exception as e:
     print(f"✗ ONNX export failed: {e}")
     import sys
+
     sys.exit(1)
 
 # Convert ONNX to TensorRT
 print("\n[3/6] Converting ONNX to TensorRT")
-print("-"*70)
+print("-" * 70)
 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 builder = trt.Builder(TRT_LOGGER)
-network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+network = builder.create_network(
+    1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+)
 parser = trt.OnnxParser(network, TRT_LOGGER)
 
 # Parse ONNX
-with open(onnx_path, 'rb') as f:
+with open(onnx_path, "rb") as f:
     if not parser.parse(f.read()):
         print("✗ ONNX parsing failed")
         for error in range(parser.num_errors):
             print(parser.get_error(error))
         import sys
+
         sys.exit(1)
 
 print("✓ ONNX parsed successfully")
@@ -97,9 +103,9 @@ else:
 profile = builder.create_optimization_profile()
 profile.set_shape(
     "input",
-    min=(1, 512),    # min batch size
-    opt=(8, 512),    # optimal batch size
-    max=(64, 512)    # max batch size
+    min=(1, 512),  # min batch size
+    opt=(8, 512),  # optimal batch size
+    max=(64, 512),  # max batch size
 )
 config.add_optimization_profile(profile)
 
@@ -108,24 +114,26 @@ try:
     if engine is None:
         print("✗ Engine build failed")
         import sys
+
         sys.exit(1)
-    
+
     # Save engine
-    trt_path = 'results/simple_model.trt'
-    with open(trt_path, 'wb') as f:
+    trt_path = "results/simple_model.trt"
+    with open(trt_path, "wb") as f:
         f.write(engine)
-    
+
     print(f"✓ TensorRT engine built and saved: {trt_path}")
     print(f"  Engine size: {len(engine) / 1024:.1f} KB")
-    
+
 except Exception as e:
     print(f"✗ Engine build failed: {e}")
     import sys
+
     sys.exit(1)
 
 # Test PyTorch inference
 print("\n[4/6] Benchmarking PyTorch (FP32)")
-print("-"*70)
+print("-" * 70)
 
 batch_size = 8
 test_input = torch.randn(batch_size, 512).cuda()
@@ -152,10 +160,10 @@ print(f"  Throughput: {batch_size / (pytorch_time/1000):.1f} samples/sec")
 
 # Test TensorRT inference
 print("\n[5/6] Benchmarking TensorRT (FP16)")
-print("-"*70)
+print("-" * 70)
 
 runtime = trt.Runtime(TRT_LOGGER)
-with open(trt_path, 'rb') as f:
+with open(trt_path, "rb") as f:
     engine_bytes = f.read()
     trt_engine = runtime.deserialize_cuda_engine(engine_bytes)
 
@@ -190,7 +198,7 @@ print(f"  Throughput: {batch_size / (trt_time/1000):.1f} samples/sec")
 
 # Verify numerical accuracy
 print("\n[6/6] Numerical Accuracy Check")
-print("-"*70)
+print("-" * 70)
 
 with torch.no_grad():
     pytorch_output = model(test_input).cpu().numpy()
@@ -210,9 +218,9 @@ else:
     print("⚠ Outputs differ significantly")
 
 # Summary
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("CONVERSION TEST SUMMARY")
-print("="*70)
+print("=" * 70)
 
 speedup = pytorch_time / trt_time
 print(f"PyTorch (FP32):  {pytorch_time:.3f} ms/batch")
@@ -221,10 +229,12 @@ print(f"Speedup: {speedup:.2f}x")
 print(f"Accuracy: Max diff {max_diff:.6f}")
 
 # Save results
-with open('results/conversion_test_results.txt', 'w') as f:
+with open("results/conversion_test_results.txt", "w") as f:
     f.write("TENSORRT CONVERSION TEST RESULTS\n")
-    f.write("="*70 + "\n\n")
-    f.write(f"Model: SimpleNet ({sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters)\n")
+    f.write("=" * 70 + "\n\n")
+    f.write(
+        f"Model: SimpleNet ({sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters)\n"
+    )
     f.write(f"Batch size: {batch_size}\n")
     f.write(f"Iterations: {iterations}\n\n")
     f.write(f"PyTorch (FP32):\n")
@@ -243,4 +253,4 @@ with open('results/conversion_test_results.txt', 'w') as f:
 print("\n✓ Results saved to: results/conversion_test_results.txt")
 print("\n✓ TensorRT conversion pipeline verified!")
 print("  Ready to convert larger models (Llama 3.2 3B)")
-print("="*70)
+print("=" * 70)
