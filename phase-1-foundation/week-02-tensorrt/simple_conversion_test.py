@@ -110,8 +110,8 @@ profile.set_shape(
 config.add_optimization_profile(profile)
 
 try:
-    engine = builder.build_serialized_network(network, config)
-    if engine is None:
+    serialized_engine = builder.build_serialized_network(network, config)
+    if serialized_engine is None:
         print("✗ Engine build failed")
         import sys
 
@@ -120,10 +120,15 @@ try:
     # Save engine
     trt_path = "results/simple_model.trt"
     with open(trt_path, "wb") as f:
-        f.write(engine)
+        f.write(serialized_engine)
 
     print(f"✓ TensorRT engine built and saved: {trt_path}")
-    print(f"  Engine size: {len(engine) / 1024:.1f} KB")
+
+    # Get size from saved file
+    import os
+
+    engine_size = os.path.getsize(trt_path)
+    print(f"  Engine size: {engine_size / 1024:.1f} KB")
 
 except Exception as e:
     print(f"✗ Engine build failed: {e}")
