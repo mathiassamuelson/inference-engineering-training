@@ -8,7 +8,7 @@ echo "ONNX EXPORT VIA OPTIMUM CLI"
 echo "========================================"
 
 cd ~/work/rtx3090-ai-training/phase-1-foundation/week-02-tensorrt
-source ~/ai-inference/bin/activate
+. ~/ai-inference/bin/activate
 
 # Force CPU-only export
 export CUDA_VISIBLE_DEVICES=""
@@ -25,14 +25,13 @@ echo ""
 echo "  This may take 10-20 minutes..."
 echo ""
 
-# Use optimum-cli for export
+# Use optimum-cli for export (FP32, will convert to FP16 in TensorRT)
 optimum-cli export onnx \
     --model meta-llama/Llama-3.2-3B-Instruct \
     --task text-generation-with-past \
     --framework pt \
     --opset 17 \
     --device cpu \
-    --fp16 \
     $OUTPUT_DIR
 
 export_status=$?
