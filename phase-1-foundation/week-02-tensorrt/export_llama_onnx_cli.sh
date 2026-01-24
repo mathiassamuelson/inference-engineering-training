@@ -7,8 +7,8 @@ echo "========================================"
 echo "ONNX EXPORT VIA OPTIMUM CLI"
 echo "========================================"
 
-cd ~/rtx3090-ai-training/phase-1-foundation/week-02-tensorrt
-source ~/rtx3090-ai-training/ai-inference/bin/activate
+cd ~/work/rtx3090-ai-training/phase-1-foundation/week-02-tensorrt
+source ~/ai-inference/bin/activate
 
 # Force CPU-only export
 export CUDA_VISIBLE_DEVICES=""
