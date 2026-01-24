@@ -8,7 +8,7 @@ echo "OPTIMUM-NVIDIA INSTALLATION"
 echo "========================================"
 
 # Activate environment
-cd ~/rtx3090-ai-training
+cd ~/work/rtx3090-ai-training
 source ai-inference/bin/activate
 
 # First, let's check what we have
