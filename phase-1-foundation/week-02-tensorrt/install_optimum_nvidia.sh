@@ -9,7 +9,7 @@ echo "========================================"
 
 # Activate environment
 cd ~/work/rtx3090-ai-training
-source ai-inference/bin/activate
+source ~/ai-inference/bin/activate
 
 # First, let's check what we have
 echo ""
