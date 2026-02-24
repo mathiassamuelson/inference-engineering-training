@@ -374,6 +374,251 @@ Combined with Week 1's discovery that the transformers library's batch scaling p
 
 ---
 
+# Week 3 Appendix: GPU Architecture & Parallelism Deep-Dive
+
+**Context:** Q&A session following Week 3 multi-GPU orchestration experiments.
+Covers foundational GPU concepts encountered during experiments and clarifies
+the parallelism strategies tested.
+
+---
+
+## A1. Parallelism Strategy Comparison
+
+| | Tensor Parallelism | Pipeline Parallelism | Data Parallelism |
+|---|---|---|---|
+| **How it works** | Splits individual layers across GPUs. Every GPU participates in computing every token. | Assigns different layers to different GPUs sequentially. Each GPU handles a stage of the model. | Places a complete model copy on each GPU. Each GPU processes independent requests. |
+| **Communication pattern** | All-reduce after every layer (most communication-intensive) | Activation transfer at each layer boundary (moderate) | None during inference (zero inter-GPU communication) |
+| **When to use** | Model too large for one GPU AND high-bandwidth interconnect available | Model too large for one GPU, moderate bandwidth acceptable | Model fits on one GPU, need to scale throughput |
+| **Latency impact** | Can reduce per-request latency (more compute per token) | Adds synchronization overhead per layer boundary | No latency impact (each GPU runs independently) |
+| **Throughput scaling** | Limited by communication overhead | Limited by pipeline bubble and sync latency | Near-linear with GPU count |
+| **Bandwidth requirement** | Very high — NVLink (56+ GB/s) or better | Moderate — activations are small (8-64 KB per token) | Minimal — only needed for initial model loading |
+| **GPU utilization** | All GPUs active on every token | Pipeline bubbles leave GPUs idle between stages | All GPUs fully utilized independently |
+| **Week 3 results** | Unviable — 378.9ms all-reduce at 1.09 GB/s bandwidth | 8-18% throughput loss from synchronization latency | 93.6% scaling efficiency at batch=32, 7,422 tok/s |
+| **Hardware consideration** | Requires NVLink or NVSwitch; PCIe x1 makes this impossible | Tolerates lower bandwidth; bottleneck is sync latency, not data size | Works on any topology; PCIe x1 has zero impact once models loaded |
+| **Ideal hardware** | DGX/HGX systems with NVLink mesh (600-900 GB/s) | Any multi-GPU system with reasonable PCIe connectivity | Any system where the model fits per-GPU |
+
+---
+
+## A2. Tensor Parallelism
+
+Tensor parallelism splits individual weight matrices across GPUs so that every GPU participates
+in computing every single token. For example, an FFN weight matrix of shape [3072 × 8192] is
+divided into four chunks of [3072 × 2048], one per GPU. Each GPU computes its portion of the
+matrix multiplication, producing a partial result. These partial results must then be combined
+via an all-reduce operation before the next layer can proceed, because the next layer's input
+depends on the complete sum.
+
+For a 28-layer model, this means 28 all-reduce operations per token generation step. Each
+all-reduce requires every GPU to exchange data with every other GPU. This is fundamentally
+different from data parallelism (where GPUs never communicate during inference) and pipeline
+parallelism (where communication happens once per layer boundary with small activation
+tensors).
+
+**Week 3 connection:** The topology discovery in Experiment 1 revealed that GPUs 1-3 are
+limited to PCIe 3.0 x1, producing only 1.09 GB/s inter-GPU bandwidth. With 378.9ms for a
+single 32MB ring all-reduce, dozens of all-reduces per token would make communication overhead
+dwarf computation time. Tensor parallelism is designed for NVLink systems delivering
+56-900 GB/s between GPUs.
+
+**NVLink bridge plan:** When the ordered AORUS NVLink bridge arrives, 2-GPU tensor parallelism
+between GPUs 0 and 1 will become viable (~56 GB/s bidirectional). This will be tested within
+vLLM and compared against 2-GPU data parallelism on the same workload.
+
+---
+
+## A3. All-Reduce Mechanics
+
+All-reduce is a collective communication operation where every GPU starts with a local partial
+result and, by the end, every GPU holds the sum of all partial results. It is the synchronization
+primitive that makes tensor parallelism work.
+
+### Why All-Reduce Is Needed
+
+When a matrix multiplication is split across GPUs in tensor parallelism, each GPU computes a
+partial output. The correct result is the sum of all partial outputs, and every GPU needs this
+complete sum before the next layer can begin.
+
+### The Naive Approach
+
+The simplest implementation sends everything to one GPU, sums there, and broadcasts back. This
+creates a bottleneck: the coordinator GPU must receive N-1 transfers and send N-1 transfers while
+all other GPUs sit idle.
+
+### Ring All-Reduce
+
+Ring all-reduce solves this by arranging GPUs in a logical ring and breaking data into chunks.
+Every GPU sends and receives simultaneously, utilizing all links in parallel.
+
+For 4 GPUs with data of size D:
+
+**Phase 1 — Reduce-Scatter (N-1 = 3 steps):**
+Each GPU sends one chunk to its neighbor and receives one chunk, accumulating partial sums as
+they flow around the ring. After 3 steps, each GPU holds the complete sum for exactly one chunk.
+
+**Phase 2 — All-Gather (N-1 = 3 more steps):**
+GPUs pass their complete chunks around the ring so everyone ends up with all chunks.
+
+**Total: 2 × (N-1) steps.** At each step, every GPU sends and receives exactly D/N data. The
+total data transferred per GPU approaches 2D regardless of GPU count — the algorithm scales well.
+
+### Mapping to Week 3 Hardware
+
+For a 32MB all-reduce across 4 GPUs at 1.09 GB/s average bandwidth:
+
+- Per step: 8MB / 1.09 GB/s ≈ 7.3ms
+- Theoretical minimum: 6 steps × 7.3ms ≈ 43.8ms
+- Measured: 378.9ms (much worse due to PCIe x1 serialization preventing send/receive overlap)
+
+Compare to NVLink at ~56 GB/s: the same 8MB transfer takes 0.14ms instead of 7.3ms — over
+50× faster. This quantifies exactly why tensor parallelism requires high-bandwidth interconnect.
+
+---
+
+## A4. Streaming Multiprocessors and SM Resources
+
+### What Is an SM?
+
+A Streaming Multiprocessor (SM) is the fundamental independent processing unit on the GPU. The
+RTX 3090 has 82 SMs, each containing:
+
+- 128 CUDA cores
+- 4 Tensor cores
+- 128 KB L1 cache / shared memory
+- Register file
+- Warp schedulers
+
+When a CUDA kernel launches, the GPU's work distributor assigns thread blocks from that kernel
+to available SMs. A single large kernel can generate enough thread blocks to occupy all 82 SMs.
+
+### Connection to Experiment 4: CUDA Streams
+
+**Experiment 4A (cross-GPU, 99.8% efficiency):** Each stream ran on a different GPU with its
+own 82 SMs. Zero resource competition — each kernel gets completely independent hardware.
+
+**Experiment 4B (same-GPU, 11.6% improvement):** Two workloads launched on the same GPU via
+different CUDA streams. The first kernel (transformer forward pass) generates enough thread
+blocks to consume nearly all 82 SMs. The second stream's kernel can only run on the few SMs
+not occupied by the first kernel's blocks.
+
+```
+82 SMs total
+Kernel A (stream 1): needs ~75 SMs of thread blocks
+Kernel B (stream 2): needs ~75 SMs of thread blocks
+Available for overlap: 82 - 75 = 7 SMs
+```
+
+The 11.6% improvement came from the GPU scheduler squeezing thread blocks from the second
+stream into brief gaps where the first kernel temporarily frees SMs between computation phases.
+
+**When same-GPU multi-stream helps:** Workloads that are small relative to GPU capacity (a
+kernel needing only 10 SMs leaves 72 free), or mixed compute + memory-copy operations that use
+different hardware units (SMs vs copy engines).
+
+**Why data parallelism won:** Instead of fighting for shared SM resources on one GPU, each
+workload gets its own full set of 82 SMs, achieving 93.6% scaling efficiency.
+
+---
+
+## A5. CUDA Cores vs Tensor Cores
+
+### CUDA Cores
+
+A CUDA core is a single arithmetic logic unit (ALU) that performs one floating-point or integer
+operation per clock cycle. It is the most basic compute unit on the GPU — conceptually similar
+to what a single ALU inside a CPU core does, but far simpler.
+
+A CPU core includes branch prediction, out-of-order execution, deep pipelines, and large caches
+for fast sequential logic. A CUDA core strips all of that away: it takes two numbers, performs
+an operation (add, multiply, fused multiply-add), and produces a result. The GPU compensates
+for individual simplicity with massive quantity — the RTX 3090 has 10,496 CUDA cores
+(82 SMs × 128 cores).
+
+For inference, CUDA cores handle general operations: activation functions (ReLU, SiLU),
+element-wise additions, normalization (LayerNorm), softmax, and anything that doesn't fit the
+matrix multiplication pattern that tensor cores specialize in.
+
+### Tensor Cores
+
+Tensor cores are specialized hardware units that perform one operation extremely fast: fused
+multiply-accumulate on small matrix tiles. The operation is D = A × B + C where A, B, C, D
+are small matrices (typically 4×4 for FP16).
+
+The RTX 3090 has 328 tensor cores (82 SMs × 4 per SM). A single tensor core processes a
+4×4 FP16 matrix multiply-accumulate in one clock cycle — 64 multiply-add operations
+simultaneously. This would take 64 CUDA cores 2 cycles each.
+
+Tensor cores exist because transformer inference is dominated by matrix multiplications: Q×K^T
+and attention×V in attention, input×W₁ and hidden×W₂ in FFN layers. These decompose into
+thousands of small tile operations mapped to tensor cores.
+
+### How They Collaborate
+
+```
+Matrix multiplications (attention, FFN)  →  Tensor cores
+    ↓
+Activation functions (SiLU, softmax)     →  CUDA cores
+    ↓
+Layer normalization                      →  CUDA cores
+    ↓
+Next matrix multiplication               →  Tensor cores
+```
+
+### The Memory Bandwidth Connection
+
+The RTX 3090's tensor cores can perform 142 TFLOPS of FP16 computation. At batch=1 with
+Llama 3.2 3B, each token requires ~6 billion multiply-accumulate operations. At 142 TFLOPS,
+tensor cores complete that in ~0.04ms. But reading 6 GB of weights from VRAM at 936 GB/s
+takes ~6.4ms. The tensor cores finish 160× faster than data arrives — they spend over 99% of
+their time idle, waiting for weights from memory.
+
+This is the memory bandwidth bottleneck measured in Week 1: 84 tok/s at 54% bandwidth
+utilization, with tensor cores starved for data.
+
+---
+
+## A6. CUDA Kernels
+
+A CUDA kernel is a function that executes on the GPU. The name comes from the
+mathematical/computational tradition where "kernel" means a fundamental unit of computation
+applied in parallel across data — the same lineage as convolution kernels in signal processing
+or kernel functions in machine learning. It has no relation to an operating system kernel
+(the privileged layer managing hardware and processes), despite the shared name.
+
+Each kernel launch carries fixed overhead (~1-5 microseconds) for CPU-GPU coordination, thread
+configuration, and synchronization. This overhead is negligible for large operations but
+dominated the SimpleNet benchmark in Week 2 (33% of total time at microsecond inference
+scales vs 4% for Llama 3.2 3B at millisecond scales).
+
+---
+
+## A7. Kernel Fusion
+
+Kernel fusion combines multiple sequential GPU operations into a single kernel, eliminating
+unnecessary VRAM round-trips for intermediate results.
+
+**Without fusion** (two separate kernels for Linear + SiLU):
+
+```
+Kernel 1 (Linear):
+  Read input from VRAM → compute output = input × weights + bias → write to VRAM
+
+Kernel 2 (SiLU):
+  Read output from VRAM → compute result = output × sigmoid(output) → write to VRAM
+```
+
+**With fusion** (one fused kernel):
+
+```
+Fused kernel:
+  Read input from VRAM → compute output → apply SiLU in registers → write to VRAM
+```
+
+The intermediate result never leaves registers, eliminating one full VRAM write and one full
+VRAM read. Given that VRAM access is the inference bottleneck (936 GB/s memory bandwidth wall
+measured in Week 1), removing unnecessary memory traffic directly improves throughput.
+
+This is a key optimization applied by TensorRT (Week 2) and vLLM's fused CUDA kernels
+(Week 4).
 *Report generated: February 2026*  
 *Hardware: 4x RTX 3090, Gigabyte B650 Eagle AX, Ubuntu 24.04, CUDA 12.6*  
 *PCIe topology: 1x x16 + 3x x1*
