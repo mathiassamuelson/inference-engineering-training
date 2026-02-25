@@ -195,9 +195,27 @@ Where 13.03 MB = KV cache for 50 tokens per sample (0.26 MB/token × 50 tokens)
 - 128 dimensions per head
 - FP16 precision (2 bytes)
 
-**Per-token KV cache size:**
+**Per-token KV cache size (Multi-Head Attention assumption):**
 ```
 2 (K and V) × 28 layers × 24 heads × 128 dim × 2 bytes = 344,064 bytes ≈ 0.33 MB per token
+```
+**Correction (Week 4):** Llama 3.2 3B uses **Grouped Query Attention (GQA)**, not standard
+Multi-Head Attention. GQA shares KV heads across multiple query heads — in this model,
+24 query heads share 8 KV heads (3:1 ratio). Since only KV heads are cached, the actual
+per-token cost is:
+```
+2 (K and V) × 28 layers × 8 KV heads × 128 dim × 2 bytes = 114,688 bytes ≈ 0.112 MB per token
+```
+This is 3x smaller than the MHA assumption. The original calculation above remains valid
+as a reference for models that use standard MHA (e.g., GPT-2, older architectures), but
+most modern LLMs use GQA specifically to reduce KV cache memory requirements.
+
+**Verify with model config:**
+```python
+from transformers import AutoConfig
+config = AutoConfig.from_pretrained("meta-llama/Llama-3.2-3B-Instruct")
+print(f"Query heads: {config.num_attention_heads}")      # 24
+print(f"KV heads: {config.num_key_value_heads}")          # 8
 ```
 
 ### Breaking Down Each Component
