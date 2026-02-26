@@ -408,6 +408,21 @@ def analyze_results(results: list[RequestResult], phase_name: str, wall_time: fl
         print(f"  {gid:>5}  {len(gr):>6}  {gt:>8,}  {gl:>8.3f}s  {gtps:>6.1f}")
 
 
+def cleanup_vllm_servers(servers):
+    for proc in servers:
+        if proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+    time.sleep(3)
+    for proc in servers:
+        if proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
 async def async_main():
     print(f"\n{'#'*70}")
     print(f"  Week 5 Experiment 4: vLLM vs Manual Data Parallelism")
@@ -461,10 +476,18 @@ async def async_main():
 
         print(f"\n  {'Metric':<25}  {'Transformers':>14}  {'vLLM':>14}  {'Ratio':>8}")
         print(f"  {'-'*24:<25}  {'-'*13:>14}  {'-'*13:>14}  {'-'*7:>8}")
-        print(f"  {'System throughput':<25}  {tf_tps:>12,.1f}  {vl_tps:>12,.1f}  {vl_tps/tf_tps:>7.2f}x")
-        print(f"  {'Request rate':<25}  {tf_rps:>12.1f}  {vl_rps:>12.1f}  {vl_rps/tf_rps:>7.2f}x")
-        print(f"  {'Avg latency':<25}  {tf_avg_lat:>11.3f}s  {vl_avg_lat:>11.3f}s  {tf_avg_lat/vl_avg_lat:>7.2f}x")
-        print(f"  {'Total requests':<25}  {len(tf_results):>14}  {len(vllm_results):>14}")
+        print(
+            f"  {'System throughput':<25}  {tf_tps:>12,.1f}  {vl_tps:>12,.1f}  {vl_tps/tf_tps:>7.2f}x"
+        )
+        print(
+            f"  {'Request rate':<25}  {tf_rps:>12.1f}  {vl_rps:>12.1f}  {vl_rps/tf_rps:>7.2f}x"
+        )
+        print(
+            f"  {'Avg latency':<25}  {tf_avg_lat:>11.3f}s  {vl_avg_lat:>11.3f}s  {tf_avg_lat/vl_avg_lat:>7.2f}x"
+        )
+        print(
+            f"  {'Total requests':<25}  {len(tf_results):>14}  {len(vllm_results):>14}"
+        )
 
         # Per-profile comparison
         print(f"\n  Per-profile latency comparison:")
@@ -476,7 +499,9 @@ async def async_main():
             if tf_prof and vl_prof:
                 tf_lat = statistics.mean([r.latency_s for r in tf_prof])
                 vl_lat = statistics.mean([r.latency_s for r in vl_prof])
-                print(f"  {name:<16}  {tf_lat:>8.3f}s  {vl_lat:>8.3f}s  {tf_lat/vl_lat:>7.2f}x")
+                print(
+                    f"  {name:<16}  {tf_lat:>8.3f}s  {vl_lat:>8.3f}s  {tf_lat/vl_lat:>7.2f}x"
+                )
 
     print(f"\n  Week 3 reference: 7,422 tok/s (batch=32, uniform, transformers)")
     print(f"{'#'*70}\n")
