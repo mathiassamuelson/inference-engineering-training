@@ -408,6 +408,80 @@ def analyze_results(results: list[RequestResult], phase_name: str, wall_time: fl
         print(f"  {gid:>5}  {len(gr):>6}  {gt:>8,}  {gl:>8.3f}s  {gtps:>6.1f}")
 
 
+async def async_main():
+    print(f"\n{'#'*70}")
+    print(f"  Week 5 Experiment 4: vLLM vs Manual Data Parallelism")
+    print(f"  Model: {MODEL}")
+    print(f"  GPUs: {len(GPU_IDS)} × RTX 3090")
+    print(f"  Concurrency: {CONCURRENCY} | Duration: {TEST_DURATION_S}s each")
+    print(f"  Workload: Mixed (32-512 tokens, weighted)")
+    print(f"{'#'*70}")
+
+    # ── Part A: Transformers ───────────────────────────────────
+    print(f"\n  Part A: Transformers + Multiprocessing")
+    print(f"  {'─'*50}")
+    print(f"  Launching {len(GPU_IDS)} worker processes...\n")
+
+    wall_start = time.time()
+    tf_results = run_transformers_test(TEST_DURATION_S, CONCURRENCY)
+    tf_wall = time.time() - wall_start
+
+    analyze_results(tf_results, "Part A: Transformers Data Parallel", tf_wall)
+
+    # Brief cooldown
+    print(f"\n  Cooling down (10s)...")
+    await asyncio.sleep(10)
+
+    # ── Part B: vLLM ───────────────────────────────────────────
+    print(f"\n  Part B: vLLM Multi-Instance")
+    print(f"  {'─'*50}")
+
+    vllm_servers = []
+    try:
+        wall_start = time.time()
+        vllm_results, vllm_servers = await run_vllm_test(TEST_DURATION_S, CONCURRENCY)
+        vllm_wall = time.time() - wall_start
+
+        analyze_results(vllm_results, "Part B: vLLM Data Parallel", vllm_wall)
+    finally:
+        cleanup_vllm_servers(vllm_servers)
+
+    # ── Comparison ─────────────────────────────────────────────
+    print(f"\n\n{'#'*70}")
+    print(f"  Direct Comparison Summary")
+    print(f"{'#'*70}")
+
+    if tf_results and vllm_results:
+        tf_tps = sum(r.tokens_generated for r in tf_results) / tf_wall
+        vl_tps = sum(r.tokens_generated for r in vllm_results) / vllm_wall
+        tf_rps = len(tf_results) / tf_wall
+        vl_rps = len(vllm_results) / vllm_wall
+        tf_avg_lat = statistics.mean([r.latency_s for r in tf_results])
+        vl_avg_lat = statistics.mean([r.latency_s for r in vllm_results])
+
+        print(f"\n  {'Metric':<25}  {'Transformers':>14}  {'vLLM':>14}  {'Ratio':>8}")
+        print(f"  {'-'*24:<25}  {'-'*13:>14}  {'-'*13:>14}  {'-'*7:>8}")
+        print(f"  {'System throughput':<25}  {tf_tps:>12,.1f}  {vl_tps:>12,.1f}  {vl_tps/tf_tps:>7.2f}x")
+        print(f"  {'Request rate':<25}  {tf_rps:>12.1f}  {vl_rps:>12.1f}  {vl_rps/tf_rps:>7.2f}x")
+        print(f"  {'Avg latency':<25}  {tf_avg_lat:>11.3f}s  {vl_avg_lat:>11.3f}s  {tf_avg_lat/vl_avg_lat:>7.2f}x")
+        print(f"  {'Total requests':<25}  {len(tf_results):>14}  {len(vllm_results):>14}")
+
+        # Per-profile comparison
+        print(f"\n  Per-profile latency comparison:")
+        print(f"  {'Profile':<16}  {'TF Lat':>9}  {'vLLM Lat':>9}  {'Speedup':>8}")
+        print(f"  {'-'*15:<16}  {'-'*8:>9}  {'-'*8:>9}  {'-'*7:>8}")
+        for name in ["quick_reply", "short_answer", "explanation", "long_response"]:
+            tf_prof = [r for r in tf_results if r.profile_name == name]
+            vl_prof = [r for r in vllm_results if r.profile_name == name]
+            if tf_prof and vl_prof:
+                tf_lat = statistics.mean([r.latency_s for r in tf_prof])
+                vl_lat = statistics.mean([r.latency_s for r in vl_prof])
+                print(f"  {name:<16}  {tf_lat:>8.3f}s  {vl_lat:>8.3f}s  {tf_lat/vl_lat:>7.2f}x")
+
+    print(f"\n  Week 3 reference: 7,422 tok/s (batch=32, uniform, transformers)")
+    print(f"{'#'*70}\n")
+
+
 if __name__ == "__main__":
     print("Starting...", flush=True)
     mp.set_start_method("spawn", force=True)
