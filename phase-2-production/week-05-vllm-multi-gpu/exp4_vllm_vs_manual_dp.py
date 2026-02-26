@@ -423,6 +423,7 @@ def cleanup_vllm_servers(servers):
             except ProcessLookupError:
                 pass
 
+
 async def async_main():
     print(f"\n{'#'*70}")
     print(f"  Week 5 Experiment 4: vLLM vs Manual Data Parallelism")
