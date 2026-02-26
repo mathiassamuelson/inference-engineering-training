@@ -52,21 +52,23 @@
 
 *Goal: Master multi-GPU production serving, larger models, and multi-model orchestration*
 
-### Week 5: vLLM Multi-GPU & Larger Models
+### Week 5: vLLM Multi-GPU & Sustained Load Testing ✅
 
-- Deploy vLLM with data parallelism across 4 GPUs
-- Benchmark Llama 3.2 3B: 4-GPU data parallel throughput vs single-GPU
-- Scale to larger models: Mistral 7B or Qwen 2.5 14B on single GPU, measure vLLM advantages at scale
-- Compare vLLM multi-GPU orchestration vs Week 3's manual data parallelism
-- **Deliverable:** Multi-GPU scaling analysis with vLLM, demonstrating continuous batching across GPUs
+- Deployed vLLM with data parallelism across 4 GPUs (separate vLLM instances per GPU)
+- Measured **7.12x throughput advantage** over transformers — the largest single performance improvement in the training program, purely from framework architecture
+- Sustained load testing confirmed throughput stability over extended runs with no memory fragmentation or degradation
+- Mixed workload continuous batching: fair compute sharing between short and long requests, latency isolation, graceful degradation under overload
+- Benchmarked Mistral 7B Instruct v0.3 on single GPU, confirming vLLM advantages scale with model size
+- Production metrics: p50/p95/p99 latency under sustained concurrent load
+- **Key finding:** Framework architecture dominates all other optimization axes — more impactful than FP16 optimization (1.56x), TensorRT conversion, or multi-GPU scaling. vLLM's operational qualities (request queuing, continuous batching, graceful degradation) proved stable and production-ready under sustained load
+- **Models tested:** Llama 3.2 3B Instruct (multi-GPU), Mistral 7B Instruct v0.3 (single GPU)
 
-### Week 6: Sustained Load Testing & Production Patterns
+### Week 6: Larger Model Scaling & Triton Introduction
 
-- Extended load tests (10+ minutes) measuring throughput stability, memory fragmentation, error rates
-- Mixed workload simulation: varying prompt lengths, concurrent generation lengths, bursty traffic
-- Measure production metrics: p50/p95/p99 latency under sustained load, throughput degradation curves
-- Queue depth analysis: how vLLM handles overload (graceful degradation vs rejection)
-- **Deliverable:** Production readiness assessment for vLLM serving, SLA compliance analysis
+- Scale to larger models across multiple GPUs: Qwen 2.5 14B across 2 GPUs, measure whether the 7x framework advantage grows with model size
+- Compare single-GPU 7B serving vs multi-GPU 14B serving: throughput, latency, cost-per-token tradeoffs
+- Begin Triton Inference Server setup: install, configure model repository, deploy a non-LLM model (embedding or classification) to learn Triton fundamentals separately from vLLM
+- **Deliverable:** Model size scaling analysis answering "at what model size does vLLM's advantage grow beyond 7x?" and initial Triton deployment
 
 ### Week 7: Triton Inference Server
 
@@ -83,7 +85,7 @@
 - Build framework decision matrix: when to use Triton vs vLLM vs both (Triton + vLLM backend)
 - **Deliverable:** Framework selection guide with measured data from this hardware
 
-### NVLink Side Experiments (When Bridge Arrives, ~Weeks 7-9)
+### NVLink Side Experiments (When Bridge Arrives)
 
 - Re-run Week 3 topology benchmark: NVLink bandwidth vs PCIe
 - Tensor parallelism within vLLM across GPU 0+1 NVLink pair
