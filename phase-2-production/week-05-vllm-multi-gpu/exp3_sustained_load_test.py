@@ -24,18 +24,18 @@ BASE_PORT = 8000
 MAX_MODEL_LEN = 4096
 
 # Sustained load parameters
-TEST_DURATION_S = 60          # each test phase runs for 60 seconds
-CONCURRENCY = 32              # 32 requests in flight across all GPUs
-RAMP_UP_S = 5                 # gradual ramp-up period
+TEST_DURATION_S = 60  # each test phase runs for 60 seconds
+CONCURRENCY = 32  # 32 requests in flight across all GPUs
+RAMP_UP_S = 5  # gradual ramp-up period
 
 # Request profiles
 UNIFORM_OUTPUT_LEN = 128
 
 # Mixed workload: simulates real chat traffic
 MIXED_PROFILES = [
-    {"name": "quick_reply",   "weight": 0.40, "max_tokens": 32},
-    {"name": "short_answer",  "weight": 0.30, "max_tokens": 128},
-    {"name": "explanation",   "weight": 0.20, "max_tokens": 256},
+    {"name": "quick_reply", "weight": 0.40, "max_tokens": 32},
+    {"name": "short_answer", "weight": 0.30, "max_tokens": 128},
+    {"name": "explanation", "weight": 0.20, "max_tokens": 256},
     {"name": "long_response", "weight": 0.10, "max_tokens": 512},
 ]
 
@@ -75,15 +75,24 @@ def pick_mixed_profile() -> dict:
 def launch_vllm_server(gpu_id: int, port: int) -> subprocess.Popen:
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu_id)}
     cmd = [
-        "python", "-m", "vllm.entrypoints.openai.api_server",
-        "--model", MODEL,
-        "--port", str(port),
-        "--max-model-len", str(MAX_MODEL_LEN),
-        "--dtype", "float16",
+        "python",
+        "-m",
+        "vllm.entrypoints.openai.api_server",
+        "--model",
+        MODEL,
+        "--port",
+        str(port),
+        "--max-model-len",
+        str(MAX_MODEL_LEN),
+        "--dtype",
+        "float16",
         "--disable-log-requests",
-        "--gpu-memory-utilization", "0.90",
+        "--gpu-memory-utilization",
+        "0.90",
     ]
-    return subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return subprocess.Popen(
+        cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
 
 
 async def wait_for_server(port: int, timeout: int = 300):
@@ -92,7 +101,9 @@ async def wait_for_server(port: int, timeout: int = 300):
     async with aiohttp.ClientSession() as session:
         while time.time() - start < timeout:
             try:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                async with session.get(
+                    url, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
                     if resp.status == 200:
                         return
             except (aiohttp.ClientError, asyncio.TimeoutError):
@@ -101,9 +112,13 @@ async def wait_for_server(port: int, timeout: int = 300):
     raise TimeoutError(f"Server on port {port} not ready within {timeout}s")
 
 
-async def send_request(session: aiohttp.ClientSession, port: int,
-                       gpu_id: int, max_tokens: int,
-                       profile_name: str) -> RequestResult:
+async def send_request(
+    session: aiohttp.ClientSession,
+    port: int,
+    gpu_id: int,
+    max_tokens: int,
+    profile_name: str,
+) -> RequestResult:
     url = f"http://localhost:{port}/v1/completions"
     payload = {
         "model": MODEL,
@@ -126,13 +141,18 @@ async def send_request(session: aiohttp.ClientSession, port: int,
     )
 
 
-async def sustained_load(ports: list[int], gpu_ids: list[int],
-                          duration_s: float, concurrency: int,
-                          mixed: bool) -> list[RequestResult]:
+async def sustained_load(
+    ports: list[int],
+    gpu_ids: list[int],
+    duration_s: float,
+    concurrency: int,
+    mixed: bool,
+) -> list[RequestResult]:
     """
     Maintain `concurrency` in-flight requests across all servers
     for `duration_s` seconds. As each request completes, immediately
     launch a replacement — this is the continuous traffic pattern.
+    Requests still in-flight at deadline are cancelled (not drained).
     """
     results = []
     end_time = time.time() + duration_s
@@ -172,12 +192,15 @@ async def sustained_load(ports: list[int], gpu_ids: list[int],
             active_tasks.add(task)
 
         # Sustained loop: replace completed requests immediately
-        while time.time() < end_time or active_tasks:
-            if not active_tasks:
+        while time.time() < end_time and active_tasks:
+            remaining = end_time - time.time()
+            if remaining <= 0:
                 break
 
             done, active_tasks = await asyncio.wait(
-                active_tasks, return_when=asyncio.FIRST_COMPLETED
+                active_tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=remaining,
             )
 
             for task in done:
@@ -192,11 +215,18 @@ async def sustained_load(ports: list[int], gpu_ids: list[int],
                     new_task = make_request()
                     active_tasks.add(new_task)
 
+        # Cancel any remaining in-flight tasks instead of draining
+        for task in active_tasks:
+            task.cancel()
+
+        # Wait briefly for cancellations to propagate
+        if active_tasks:
+            await asyncio.gather(*active_tasks, return_exceptions=True)
+
     return results
 
 
-def analyze_results(results: list[RequestResult], phase_name: str,
-                    wall_time: float):
+def analyze_results(results: list[RequestResult], phase_name: str, wall_time: float):
     """Print detailed analysis of sustained load results."""
     if not results:
         print(f"  No results for {phase_name}")
@@ -233,16 +263,22 @@ def analyze_results(results: list[RequestResult], phase_name: str,
         per_gpu.setdefault(r.gpu_id, []).append(r)
 
     print()
-    print(f"  {'GPU':>5}  {'Reqs':>6}  {'Tokens':>8}  {'Avg Lat':>9}  {'p95 Lat':>9}  {'tok/s':>7}")
-    print(f"  {'---':>5}  {'----':>6}  {'------':>8}  {'-------':>9}  {'-------':>9}  {'-----':>7}")
+    print(
+        f"  {'GPU':>5}  {'Reqs':>6}  {'Tokens':>8}  {'Avg Lat':>9}  {'p95 Lat':>9}  {'tok/s':>7}"
+    )
+    print(
+        f"  {'---':>5}  {'----':>6}  {'------':>8}  {'-------':>9}  {'-------':>9}  {'-----':>7}"
+    )
     for gid in sorted(per_gpu.keys()):
         gr = per_gpu[gid]
         gl = sorted([r.latency_s for r in gr])
         gt = sum(r.tokens_generated for r in gr)
-        print(f"  {gid:>5}  {len(gr):>6}  {gt:>8,}  "
-              f"{statistics.mean(gl):>8.3f}s  "
-              f"{gl[int(len(gl)*0.95)]:>8.3f}s  "
-              f"{sum(r.tokens_generated/r.latency_s for r in gr)/len(gr):>6.1f}")
+        print(
+            f"  {gid:>5}  {len(gr):>6}  {gt:>8,}  "
+            f"{statistics.mean(gl):>8.3f}s  "
+            f"{gl[int(len(gl)*0.95)]:>8.3f}s  "
+            f"{sum(r.tokens_generated/r.latency_s for r in gr)/len(gr):>6.1f}"
+        )
 
     # Per-profile breakdown (mixed workload only)
     profiles = {}
@@ -252,10 +288,14 @@ def analyze_results(results: list[RequestResult], phase_name: str,
     if len(profiles) > 1:
         print()
         print(f"  Request profile breakdown:")
-        print(f"  {'Profile':<16}  {'Count':>6}  {'Avg Tokens':>11}  "
-              f"{'Avg Lat':>9}  {'p95 Lat':>9}  {'tok/s':>7}")
-        print(f"  {'-'*15:<16}  {'-----':>6}  {'----------':>11}  "
-              f"{'-------':>9}  {'-------':>9}  {'-----':>7}")
+        print(
+            f"  {'Profile':<16}  {'Count':>6}  {'Avg Tokens':>11}  "
+            f"{'Avg Lat':>9}  {'p95 Lat':>9}  {'tok/s':>7}"
+        )
+        print(
+            f"  {'-'*15:<16}  {'-----':>6}  {'----------':>11}  "
+            f"{'-------':>9}  {'-------':>9}  {'-----':>7}"
+        )
         for name in ["quick_reply", "short_answer", "explanation", "long_response"]:
             if name not in profiles:
                 continue
@@ -263,14 +303,17 @@ def analyze_results(results: list[RequestResult], phase_name: str,
             pl = sorted([r.latency_s for r in pr])
             avg_tok = sum(r.tokens_generated for r in pr) / len(pr)
             avg_tps = sum(r.tokens_generated / r.latency_s for r in pr) / len(pr)
-            print(f"  {name:<16}  {len(pr):>6}  {avg_tok:>10.1f}  "
-                  f"{statistics.mean(pl):>8.3f}s  "
-                  f"{pl[int(len(pl)*0.95)]:>8.3f}s  "
-                  f"{avg_tps:>6.1f}")
+            print(
+                f"  {name:<16}  {len(pr):>6}  {avg_tok:>10.1f}  "
+                f"{statistics.mean(pl):>8.3f}s  "
+                f"{pl[int(len(pl)*0.95)]:>8.3f}s  "
+                f"{avg_tps:>6.1f}"
+            )
 
 
-def check_stability(results: list[RequestResult], wall_time: float,
-                     window_s: float = 10.0):
+def check_stability(
+    results: list[RequestResult], wall_time: float, window_s: float = 10.0
+):
     """Check throughput stability across time windows."""
     if not results:
         return
@@ -295,13 +338,17 @@ def check_stability(results: list[RequestResult], wall_time: float,
         w_tokens = sum(r.tokens_generated for r in w_results)
         w_tps = w_tokens / window_s
         window_throughputs.append(w_tps)
-        print(f"  {i*window_s:>6.0f}-{(i+1)*window_s:>2.0f}s  "
-              f"{len(w_results):>9}  {w_tokens:>8,}  {w_tps:>7,.1f}")
+        print(
+            f"  {i*window_s:>6.0f}-{(i+1)*window_s:>2.0f}s  "
+            f"{len(w_results):>9}  {w_tokens:>8,}  {w_tps:>7,.1f}"
+        )
 
     if len(window_throughputs) >= 2:
         cv = statistics.stdev(window_throughputs) / statistics.mean(window_throughputs)
-        print(f"\n  Coefficient of variation: {cv:.3f} "
-              f"({'stable' if cv < 0.1 else 'unstable'})")
+        print(
+            f"\n  Coefficient of variation: {cv:.3f} "
+            f"({'stable' if cv < 0.1 else 'unstable'})"
+        )
 
 
 async def main():
@@ -379,12 +426,22 @@ async def main():
         print(f"{'#'*70}\n")
 
     finally:
+        # Kill entire process groups to catch vLLM child processes
+        import signal
+
         for proc in servers:
-            proc.terminate()
-            try:
-                proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+            if proc.poll() is None:
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+        time.sleep(3)
+        for proc in servers:
+            if proc.poll() is None:
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
 
 if __name__ == "__main__":
