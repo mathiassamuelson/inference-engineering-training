@@ -33,9 +33,9 @@ TEST_DURATION_S = 60
 CONCURRENCY = 32  # total across all GPUs
 
 MIXED_PROFILES = [
-    {"name": "quick_reply",   "weight": 0.40, "max_tokens": 32},
-    {"name": "short_answer",  "weight": 0.30, "max_tokens": 128},
-    {"name": "explanation",   "weight": 0.20, "max_tokens": 256},
+    {"name": "quick_reply", "weight": 0.40, "max_tokens": 32},
+    {"name": "short_answer", "weight": 0.30, "max_tokens": 128},
+    {"name": "explanation", "weight": 0.20, "max_tokens": 256},
     {"name": "long_response", "weight": 0.10, "max_tokens": 512},
 ]
 
@@ -72,8 +72,10 @@ def pick_mixed_profile() -> dict:
 
 # ── Part A: Transformers + Multiprocessing ─────────────────────
 
-def transformers_worker(gpu_id: int, request_queue: mp.Queue,
-                         result_queue: mp.Queue, stop_event):
+
+def transformers_worker(
+    gpu_id: int, request_queue: mp.Queue, result_queue: mp.Queue, stop_event
+):
     """Worker process: loads model on one GPU, processes requests from queue."""
     torch.cuda.set_device(gpu_id)
     device = f"cuda:{gpu_id}"
@@ -113,13 +115,15 @@ def transformers_worker(gpu_id: int, request_queue: mp.Queue,
         tokens_generated = outputs.shape[1] - inputs["input_ids"].shape[1]
         elapsed = time.time() - start
 
-        result_queue.put(RequestResult(
-            gpu_id=gpu_id,
-            tokens_generated=tokens_generated,
-            latency_s=elapsed,
-            profile_name=profile_name,
-            timestamp=time.time(),
-        ))
+        result_queue.put(
+            RequestResult(
+                gpu_id=gpu_id,
+                tokens_generated=tokens_generated,
+                latency_s=elapsed,
+                profile_name=profile_name,
+                timestamp=time.time(),
+            )
+        )
 
 
 def run_transformers_test(duration_s: float, concurrency: int) -> list[RequestResult]:
@@ -129,7 +133,6 @@ def run_transformers_test(duration_s: float, concurrency: int) -> list[RequestRe
     Each worker pulls one request at a time — this is static batching
     with batch_size=1, the closest analogue to how a naive deployment works.
     """
-    mp.set_start_method("spawn", force=True)
 
     request_queue = mp.Queue()
     result_queue = mp.Queue()
@@ -209,19 +212,30 @@ def run_transformers_test(duration_s: float, concurrency: int) -> list[RequestRe
 
 # ── Part B: vLLM Multi-Instance ────────────────────────────────
 
+
 def launch_vllm_server(gpu_id: int, port: int) -> subprocess.Popen:
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu_id)}
     cmd = [
-        "python", "-m", "vllm.entrypoints.openai.api_server",
-        "--model", MODEL,
-        "--port", str(port),
-        "--max-model-len", str(MAX_MODEL_LEN),
-        "--dtype", "float16",
+        "python",
+        "-m",
+        "vllm.entrypoints.openai.api_server",
+        "--model",
+        MODEL,
+        "--port",
+        str(port),
+        "--max-model-len",
+        str(MAX_MODEL_LEN),
+        "--dtype",
+        "float16",
         "--disable-log-requests",
-        "--gpu-memory-utilization", "0.90",
+        "--gpu-memory-utilization",
+        "0.90",
     ]
     return subprocess.Popen(
-        cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        cmd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         preexec_fn=os.setsid,
     )
 
@@ -232,7 +246,9 @@ async def wait_for_server(port: int, timeout: int = 300):
     async with aiohttp.ClientSession() as session:
         while time.time() - start < timeout:
             try:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                async with session.get(
+                    url, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
                     if resp.status == 200:
                         return
             except (aiohttp.ClientError, asyncio.TimeoutError):
@@ -263,7 +279,9 @@ async def vllm_send_request(session, port, gpu_id, max_tokens, profile_name):
     )
 
 
-async def run_vllm_test(duration_s: float, concurrency: int) -> tuple[list[RequestResult], list]:
+async def run_vllm_test(
+    duration_s: float, concurrency: int
+) -> tuple[list[RequestResult], list]:
     """Run vLLM sustained mixed workload — same as Experiment 3 Phase B."""
     servers = []
     ports = []
@@ -308,8 +326,13 @@ async def run_vllm_test(duration_s: float, concurrency: int) -> tuple[list[Reque
             request_counter += 1
             profile = pick_mixed_profile()
             return asyncio.create_task(
-                vllm_send_request(session, ports[idx], GPU_IDS[idx],
-                                   profile["max_tokens"], profile["name"])
+                vllm_send_request(
+                    session,
+                    ports[idx],
+                    GPU_IDS[idx],
+                    profile["max_tokens"],
+                    profile["name"],
+                )
             )
 
         for _ in range(concurrency):
@@ -344,8 +367,7 @@ async def run_vllm_test(duration_s: float, concurrency: int) -> tuple[list[Reque
     return results, servers
 
 
-def analyze_results(results: list[RequestResult], phase_name: str,
-                    wall_time: float):
+def analyze_results(results: list[RequestResult], phase_name: str, wall_time: float):
     """Print analysis matching Experiment 3 format."""
     if not results:
         print(f"  No results for {phase_name}")
@@ -384,3 +406,18 @@ def analyze_results(results: list[RequestResult], phase_name: str,
         gl = statistics.mean([r.latency_s for r in gr])
         gtps = sum(r.tokens_generated / r.latency_s for r in gr) / len(gr)
         print(f"  {gid:>5}  {len(gr):>6}  {gt:>8,}  {gl:>8.3f}s  {gtps:>6.1f}")
+
+
+if __name__ == "__main__":
+    print("Starting...", flush=True)
+    mp.set_start_method("spawn", force=True)
+    try:
+        asyncio.run(async_main())
+    except KeyboardInterrupt:
+        print("\nInterrupted.")
+        sys.exit(1)
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        sys.exit(1)
