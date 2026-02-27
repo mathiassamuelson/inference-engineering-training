@@ -49,22 +49,23 @@ NUM_ITERATIONS = 3
 # so effective capacity is much higher for short sequences
 CONCURRENCY_LEVELS = [1, 2, 4, 8, 16, 32, 64, 128, 256]
 
+# ── Week 5 baselines (vLLM, Mistral 7B, single GPU) ──────────────
+WEEK5_7B_BASELINES = {
+    1: {"total": 53.2, "per_sample": 53.2},
+}
+
 # ── Week 4 baselines (vLLM, Llama 3.2 3B, single GPU) ────────────
-WEEK4_BASELINES = {
-    1:    {"total": 106.0,  "per_sample": 106.0},
-    8:    {"total": 780.0,  "per_sample": 97.5},
-    64:   {"total": 4200.0, "per_sample": 65.6},
-    128:  {"total": 5400.0, "per_sample": 42.2},
-    256:  {"total": 5900.0, "per_sample": 23.0},
+WEEK4_3B_BASELINES = {
+    1: {"total": 106.4, "per_sample": 106.4},
 }
 
 # ── Week 1 baselines (transformers, Llama 3.2 3B, single GPU) ────
 WEEK1_BASELINES = {
-    1:    {"total": 84.0,   "per_sample": 84.2},
-    8:    {"total": 609.0,  "per_sample": 76.1},
-    64:   {"total": 3376.0, "per_sample": 52.7},
-    128:  {"total": 4291.0, "per_sample": 33.5},
-    256:  {"total": 4656.0, "per_sample": 18.2},
+    1: {"total": 84.0, "per_sample": 84.2},
+    8: {"total": 609.0, "per_sample": 76.1},
+    64: {"total": 3376.0, "per_sample": 52.7},
+    128: {"total": 4291.0, "per_sample": 33.5},
+    256: {"total": 4656.0, "per_sample": 18.2},
 }
 
 
@@ -79,18 +80,33 @@ async def send_request(session, request_id):
 
     start = time.perf_counter()
     try:
-        async with session.post(VLLM_URL, json=payload, timeout=aiohttp.ClientTimeout(total=120)) as resp:
+        async with session.post(
+            VLLM_URL, json=payload, timeout=aiohttp.ClientTimeout(total=120)
+        ) as resp:
             if resp.status != 200:
                 error_text = await resp.text()
-                return {"success": False, "error": f"HTTP {resp.status}: {error_text[:200]}",
-                        "latency": time.perf_counter() - start, "tokens": 0}
+                return {
+                    "success": False,
+                    "error": f"HTTP {resp.status}: {error_text[:200]}",
+                    "latency": time.perf_counter() - start,
+                    "tokens": 0,
+                }
             data = await resp.json()
             elapsed = time.perf_counter() - start
             tokens = data["usage"]["completion_tokens"]
-            return {"success": True, "latency": elapsed, "tokens": tokens, "request_id": request_id}
+            return {
+                "success": True,
+                "latency": elapsed,
+                "tokens": tokens,
+                "request_id": request_id,
+            }
     except Exception as e:
-        return {"success": False, "error": str(e)[:200],
-                "latency": time.perf_counter() - start, "tokens": 0}
+        return {
+            "success": False,
+            "error": str(e)[:200],
+            "latency": time.perf_counter() - start,
+            "tokens": 0,
+        }
 
 
 async def run_concurrent_batch(session, num_requests):
@@ -124,18 +140,28 @@ async def benchmark_concurrency(session, concurrency, num_iterations):
         total_throughput = total_tokens / wall_time
         per_sample_throughput = total_tokens / (wall_time * len(successful))
 
-        iteration_results.append({
-            "wall_time": wall_time,
-            "total_tokens": total_tokens,
-            "successful": len(successful),
-            "failed": len(failed),
-            "total_throughput": total_throughput,
-            "per_sample_throughput": per_sample_throughput,
-            "latency_mean": statistics.mean(latencies),
-            "latency_p50": statistics.median(latencies),
-            "latency_p95": sorted(latencies)[int(0.95 * len(latencies))] if len(latencies) > 1 else latencies[0],
-            "latency_p99": sorted(latencies)[int(0.99 * len(latencies))] if len(latencies) > 1 else latencies[0],
-        })
+        iteration_results.append(
+            {
+                "wall_time": wall_time,
+                "total_tokens": total_tokens,
+                "successful": len(successful),
+                "failed": len(failed),
+                "total_throughput": total_throughput,
+                "per_sample_throughput": per_sample_throughput,
+                "latency_mean": statistics.mean(latencies),
+                "latency_p50": statistics.median(latencies),
+                "latency_p95": (
+                    sorted(latencies)[int(0.95 * len(latencies))]
+                    if len(latencies) > 1
+                    else latencies[0]
+                ),
+                "latency_p99": (
+                    sorted(latencies)[int(0.99 * len(latencies))]
+                    if len(latencies) > 1
+                    else latencies[0]
+                ),
+            }
+        )
 
     return iteration_results
 
@@ -157,7 +183,9 @@ async def main():
 
         # ── Health check ──
         try:
-            async with session.get("http://localhost:8000/health", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+            async with session.get(
+                "http://localhost:8000/health", timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
                 if resp.status != 200:
                     print("ERROR: Server not healthy")
                     return
@@ -175,7 +203,9 @@ async def main():
             if not result["success"]:
                 print(f"  Warmup request {i} failed: {result['error']}")
             else:
-                print(f"  Warmup {i+1}: {result['tokens']} tokens in {result['latency']:.3f}s")
+                print(
+                    f"  Warmup {i+1}: {result['tokens']} tokens in {result['latency']:.3f}s"
+                )
         print()
 
         # ── Benchmark each concurrency level ──
@@ -191,7 +221,9 @@ async def main():
                 continue
 
             avg_total_tp = statistics.mean(r["total_throughput"] for r in results)
-            avg_per_sample = statistics.mean(r["per_sample_throughput"] for r in results)
+            avg_per_sample = statistics.mean(
+                r["per_sample_throughput"] for r in results
+            )
             avg_latency = statistics.mean(r["latency_mean"] for r in results)
             avg_p95 = statistics.mean(r["latency_p95"] for r in results)
             avg_wall = statistics.mean(r["wall_time"] for r in results)
@@ -205,9 +237,11 @@ async def main():
                 "iterations": results,
             }
 
-            print(f"  Total: {avg_total_tp:,.1f} tok/s | "
-                  f"Per-sample: {avg_per_sample:.1f} tok/s | "
-                  f"Latency mean: {avg_latency:.3f}s p95: {avg_p95:.3f}s")
+            print(
+                f"  Total: {avg_total_tp:,.1f} tok/s | "
+                f"Per-sample: {avg_per_sample:.1f} tok/s | "
+                f"Latency mean: {avg_latency:.3f}s p95: {avg_p95:.3f}s"
+            )
             print()
 
         # ── Results Summary ──
@@ -216,9 +250,11 @@ async def main():
         print("RESULTS: QWEN 2.5 14B (TP=2, 2x RTX 3090)")
         print("=" * 120)
         print()
-        print(f"{'Conc':>6} | {'14B Total':>10} {'14B/Sample':>11} | "
-              f"{'Mean Lat':>9} {'P95 Lat':>9} | "
-              f"{'vs W4 3B':>9} {'vs W1 TF':>9}")
+        print(
+            f"{'Conc':>6} | {'14B Total':>10} {'14B/Sample':>11} | "
+            f"{'Mean Lat':>9} {'P95 Lat':>9} | "
+            f"{'vs W4 3B':>9} {'vs W1 TF':>9}"
+        )
         print("-" * 120)
 
         for conc in CONCURRENCY_LEVELS:
@@ -231,23 +267,33 @@ async def main():
             # Find closest Week 4 baseline
             w4_concs = sorted(WEEK4_BASELINES.keys())
             w4_match = min(w4_concs, key=lambda x: abs(x - conc)) if w4_concs else None
-            w4_total = WEEK4_BASELINES.get(w4_match, {}).get("total", 0) if w4_match and abs(w4_match - conc) <= conc * 0.1 else 0
+            w4_total = (
+                WEEK4_BASELINES.get(w4_match, {}).get("total", 0)
+                if w4_match and abs(w4_match - conc) <= conc * 0.1
+                else 0
+            )
 
             # Find closest Week 1 baseline
             w1_concs = sorted(WEEK1_BASELINES.keys())
             w1_match = min(w1_concs, key=lambda x: abs(x - conc)) if w1_concs else None
-            w1_total = WEEK1_BASELINES.get(w1_match, {}).get("total", 0) if w1_match and abs(w1_match - conc) <= conc * 0.1 else 0
+            w1_total = (
+                WEEK1_BASELINES.get(w1_match, {}).get("total", 0)
+                if w1_match and abs(w1_match - conc) <= conc * 0.1
+                else 0
+            )
 
             w4_ratio = f"{r['total_throughput']/w4_total:.2f}x" if w4_total else "—"
             w1_ratio = f"{r['total_throughput']/w1_total:.2f}x" if w1_total else "—"
 
-            print(f"{conc:>6} | "
-                  f"{r['total_throughput']:>8,.1f}   "
-                  f"{r['per_sample_throughput']:>9.1f}   | "
-                  f"{r['latency_mean']:>8.3f}s "
-                  f"{r['latency_p95']:>8.3f}s | "
-                  f"{w4_ratio:>9} "
-                  f"{w1_ratio:>9}")
+            print(
+                f"{conc:>6} | "
+                f"{r['total_throughput']:>8,.1f}   "
+                f"{r['per_sample_throughput']:>9.1f}   | "
+                f"{r['latency_mean']:>8.3f}s "
+                f"{r['latency_p95']:>8.3f}s | "
+                f"{w4_ratio:>9} "
+                f"{w1_ratio:>9}"
+            )
 
         # ── Key Metrics ──
         print()
@@ -257,20 +303,31 @@ async def main():
 
         if 1 in all_results:
             r1 = all_results[1]
-            print(f"  Single request:    {r1['total_throughput']:.1f} tok/s "
-                  f"(14B on 2 GPUs) vs 106 tok/s (3B on 1 GPU, Week 4)")
+            print(
+                f"  Single request:    {r1['total_throughput']:.1f} tok/s "
+                f"(14B on 2 GPUs) vs 106 tok/s (3B on 1 GPU, Week 4)"
+            )
             print(f"  Per-token latency: {1000/r1['total_throughput']:.1f} ms/tok")
 
         if all_results:
-            peak_conc = max(all_results, key=lambda c: all_results[c]["total_throughput"])
+            peak_conc = max(
+                all_results, key=lambda c: all_results[c]["total_throughput"]
+            )
             peak_tp = all_results[peak_conc]["total_throughput"]
-            print(f"  Peak throughput:   {peak_tp:,.1f} tok/s at concurrency={peak_conc}")
+            print(
+                f"  Peak throughput:   {peak_tp:,.1f} tok/s at concurrency={peak_conc}"
+            )
             print(f"  vs Week 1 ceiling: {peak_tp/5000:.2f}x over transformers 3B peak")
-            print(f"  vs Week 4 peak:    {peak_tp/6100:.2f}x over vLLM 3B single-GPU peak")
+            print(
+                f"  vs Week 4 peak:    {peak_tp/6100:.2f}x over vLLM 3B single-GPU peak"
+            )
 
         # Per-sample above 20 tok/s (usable threshold for 14B)
-        above_20 = [c for c in CONCURRENCY_LEVELS
-                    if c in all_results and all_results[c]["per_sample_throughput"] >= 20]
+        above_20 = [
+            c
+            for c in CONCURRENCY_LEVELS
+            if c in all_results and all_results[c]["per_sample_throughput"] >= 20
+        ]
         if above_20:
             print(f"  Per-sample ≥20:    Up to concurrency={max(above_20)}")
 
