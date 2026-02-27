@@ -265,10 +265,10 @@ async def main():
             r = all_results[conc]
 
             # Find closest Week 4 baseline
-            w4_concs = sorted(WEEK4_BASELINES.keys())
+            w4_concs = sorted(WEEK4_3B_BASELINES.keys())
             w4_match = min(w4_concs, key=lambda x: abs(x - conc)) if w4_concs else None
             w4_total = (
-                WEEK4_BASELINES.get(w4_match, {}).get("total", 0)
+                WEEK4_3B_BASELINES.get(w4_match, {}).get("total", 0)
                 if w4_match and abs(w4_match - conc) <= conc * 0.1
                 else 0
             )
