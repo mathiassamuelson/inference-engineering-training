@@ -1,0 +1,112 @@
+====================================================================================================
+WEEK 6 EXPERIMENT 2: MISTRAL 7B (1 GPU) THROUGHPUT BENCHMARK
+====================================================================================================
+Model:           mistralai/Mistral-7B-Instruct-v0.3
+GPUs:            1x RTX 3090 (GPU 0)
+Generation:      50 tokens per request
+Warmup:          5 requests
+Iterations:      3 per concurrency level
+Concurrency:     [1, 2, 4, 8, 16, 32, 64, 128, 256]
+
+Server health check: OK
+
+Warming up with 5 requests...
+  Warmup 1: 50 tokens in 0.976s
+  Warmup 2: 50 tokens in 0.941s
+  Warmup 3: 50 tokens in 0.941s
+  Warmup 4: 50 tokens in 0.942s
+  Warmup 5: 50 tokens in 0.941s
+
+── Concurrency 1 ──
+  Total: 53.1 tok/s | Per-sample: 53.1 tok/s | Latency mean: 0.941s p95: 0.941s
+
+── Concurrency 2 ──
+  Total: 100.7 tok/s | Per-sample: 50.4 tok/s | Latency mean: 0.983s p95: 0.992s
+
+── Concurrency 4 ──
+  Total: 199.7 tok/s | Per-sample: 49.9 tok/s | Latency mean: 0.996s p95: 1.001s
+
+── Concurrency 8 ──
+  Total: 391.0 tok/s | Per-sample: 48.9 tok/s | Latency mean: 1.020s p95: 1.023s
+
+── Concurrency 16 ──
+  Total: 710.3 tok/s | Per-sample: 44.4 tok/s | Latency mean: 1.124s p95: 1.126s
+
+── Concurrency 32 ──
+  Total: 1,356.6 tok/s | Per-sample: 42.4 tok/s | Latency mean: 1.177s p95: 1.179s
+
+── Concurrency 64 ──
+  Total: 2,229.1 tok/s | Per-sample: 34.8 tok/s | Latency mean: 1.434s p95: 1.435s
+
+── Concurrency 128 ──
+  Total: 3,014.2 tok/s | Per-sample: 23.5 tok/s | Latency mean: 2.120s p95: 2.122s
+
+── Concurrency 256 ──
+  Total: 3,115.9 tok/s | Per-sample: 12.2 tok/s | Latency mean: 4.086s p95: 4.102s
+
+
+==================================================================================================================================
+ECONOMICS COMPARISON: MISTRAL 7B (1 GPU) vs QWEN 14B (2 GPU, TP=2)
+==================================================================================================================================
+
+THROUGHPUT (tok/s)
+----------------------------------------------------------------------------------------------------------------------------------
+  Conc |   7B Total   7B/Samp |  14B Total  14B/Samp | Total Ratio  Samp Ratio | 7B Lat p95 14B Lat p95
+----------------------------------------------------------------------------------------------------------------------------------
+     1 |     53.1      53.1   |     38.6      38.6   |      1.38x        1.38x   |     0.941s      1.295s
+     2 |    100.7      50.4   |     68.1      34.1   |      1.48x        1.48x   |     0.992s      1.468s
+     4 |    199.7      49.9   |    112.0      28.0   |      1.78x        1.78x   |     1.001s      1.785s
+     8 |    391.0      48.9   |    165.1      20.6   |      2.37x        2.37x   |     1.023s      2.423s
+    16 |    710.3      44.4   |    218.3      13.6   |      3.25x        3.26x   |     1.126s      3.665s
+    32 |  1,356.6      42.4   |    267.3       8.4   |      5.08x        5.05x   |     1.179s      5.986s
+    64 |  2,229.1      34.8   |    303.6       4.7   |      7.34x        7.41x   |     1.435s     10.539s
+   128 |  3,014.2      23.5   |    312.1       2.4   |      9.66x        9.81x   |     2.122s     20.502s
+   256 |  3,115.9      12.2   |    316.5       1.2   |      9.84x       10.14x   |     4.102s     40.437s
+
+==================================================================================================================================
+COST EFFICIENCY
+==================================================================================================================================
+
+  Metric                                     Mistral 7B (1 GPU)     Qwen 14B (2 GPU)
+  ---------------------------------------- -------------------- --------------------
+  GPUs used                                                   1                    2
+  Model parameters                                           7B                  14B
+  Single-request tok/s                                   53.1                38.6  
+  Peak throughput (tok/s)                             3,115.9               316.5  
+  Peak throughput per GPU (tok/s)                     3,115.9               158.2  
+  Cloud cost ($/hr)                                       $1.00                $2.00
+  Peak tokens per $1 (cloud)                       11,217,374             569,700  
+  Cost ratio (14B/7B per token)                1.00x (baseline) 19.69x  
+
+  Power draw (TDP, watts)                                 350W                 700W  
+  Electricity cost per M tokens                         $0.0000              $0.0001
+
+==================================================================================================================================
+SLA ANALYSIS: MAX CONCURRENT USERS BY LATENCY TARGET
+==================================================================================================================================
+
+  p95 Target        7B Users   7B tok/s |  14B Users  14B tok/s |    Quality
+  --------------- ---------- ----------   ---------- ----------   ----------
+  p95 <  1.0s             2    100.7   |          0      0.0   |  14B >> 7B
+  p95 <  2.0s            64   2229.1   |          4    112.0   |  14B >> 7B
+  p95 <  5.0s           256   3115.9   |         16    218.3   |  14B >> 7B
+  p95 < 10.0s           256   3115.9   |         32    267.3   |  14B >> 7B
+
+==================================================================================================================================
+DECISION FRAMEWORK
+==================================================================================================================================
+
+  Question: Is the 14B model worth 2x the GPU cost?
+
+  Latency penalty:     1.38x slower per request
+  Throughput penalty:   9.84x fewer total tokens
+  Per-GPU efficiency:  3116 tok/s/GPU (7B) vs 158 tok/s/GPU (14B)
+  Cost per token:      19.69x more expensive (14B)
+
+  USE 7B WHEN: Latency-sensitive, high-throughput, cost-constrained,
+               simple tasks (summarization, extraction, classification)
+
+  USE 14B WHEN: Quality-critical, reasoning-heavy, acceptable latency,
+                tasks where wrong answers cost more than GPU time
+
+

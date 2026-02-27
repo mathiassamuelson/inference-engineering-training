@@ -1,0 +1,86 @@
+================================================================================
+WEEK 6 EXPERIMENT 3: TRITON INFERENCE SERVER — EMBEDDING MODEL
+================================================================================
+
+Loading tokenizer...
+
+================================================================================
+PART A: TRITON HEALTH & METADATA
+================================================================================
+
+  Server ready:  True (HTTP 200)
+  Model name:    embedding
+  Versions:      ['1']
+  Platform:      onnxruntime_onnx
+
+  Max batch:     64
+  Inputs:        ['input_ids', 'attention_mask', 'token_type_ids']
+  Outputs:       ['last_hidden_state']
+  Instance:      GPU [2]
+  Dyn batching:  preferred=[8, 16, 32], max_delay=100000μs
+
+================================================================================
+PART B: SINGLE INFERENCE REQUEST
+================================================================================
+
+  Input text:    "GPU memory bandwidth determines inference throughput"
+  Output shape:  [1, 128, 384]
+  Embedding dim: 384
+  CLS norm:      7.8847
+  First 5 dims:  ['0.0057', '-0.0790', '-0.0615', '0.0193', '-0.0037']
+  Latency:       213.6 ms
+
+================================================================================
+PART C: SEMANTIC SIMILARITY VALIDATION
+================================================================================
+
+  Cosine Similarity Matrix:
+        S 1  S 2  S 3  S 4
+  S 1  1.00  0.73  0.49  0.66  "GPU memory bandwidth limits inference speed"
+  S 2  0.73  1.00  0.46  0.56  "The throughput of neural network inference depends..."
+  S 3  0.49  0.46  1.00  0.50  "I enjoy cooking pasta on weekends"
+  S 4  0.66  0.56  0.50  1.00  "CUDA cores process tensor operations in parallel"
+
+  GPU bandwidth ↔ VRAM throughput:  0.728 (expect HIGH)
+  GPU bandwidth ↔ cooking pasta:    0.492 (expect LOW)
+  GPU bandwidth ↔ CUDA tensors:     0.659 (expect MEDIUM)
+  Semantic coherence:               PASS ✓
+
+================================================================================
+PART D: DYNAMIC BATCHING THROUGHPUT BENCHMARK
+================================================================================
+
+  Warming up...
+
+  Concurrency    1:      6.5 req/s | mean   146.6ms | p95   146.6ms
+  Concurrency    2:     10.2 req/s | mean   168.0ms | p95   188.9ms
+  Concurrency    4:     14.1 req/s | mean   212.0ms | p95   276.0ms
+  Concurrency    8:     22.5 req/s | mean   198.5ms | p95   347.1ms
+  Concurrency   16:     22.9 req/s | mean   369.5ms | p95   690.8ms
+  Concurrency   32:     23.1 req/s | mean   707.9ms | p95  1308.2ms
+  Concurrency   64:     23.0 req/s | mean  1414.5ms | p95  2643.9ms
+  Concurrency  128:     23.2 req/s | mean  2782.6ms | p95  5244.2ms
+
+  Peak throughput:     23.2 req/s at concurrency=128
+  Batching speedup:    3.5x over single request
+  Single-req latency:  146.6ms
+
+================================================================================
+PART E: TRITON PROMETHEUS METRICS
+================================================================================
+
+  nv_inference_request_success{model="embedding",version="1"} 775
+  nv_inference_request_failure{model="embedding",reason="OTHER",version="1"} 0
+  nv_inference_count{model="embedding",version="1"} 775
+  nv_inference_exec_count{model="embedding",version="1"} 55
+  nv_inference_queue_duration_us{model="embedding",version="1"} 835820623
+  nv_inference_compute_infer_duration_us{model="embedding",version="1"} 9447954
+  nv_gpu_utilization{gpu_uuid="GPU-0da3bc5b-8e8b-16e7-8eee-5084ea3d2c82"} 0
+  nv_gpu_memory_used_bytes{gpu_uuid="GPU-0da3bc5b-8e8b-16e7-8eee-5084ea3d2c82"} 344981504
+
+  Full metrics endpoint: http://localhost:8003/metrics
+  (Prometheus-compatible, can be scraped by Grafana)
+
+================================================================================
+EXPERIMENT 3 COMPLETE
+================================================================================

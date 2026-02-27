@@ -1,0 +1,77 @@
+====================================================================================================
+WEEK 6 EXPERIMENT 1: QWEN 2.5 14B (TP=2) THROUGHPUT BENCHMARK
+====================================================================================================
+Model:           Qwen/Qwen2.5-14B-Instruct
+GPUs:            2x RTX 3090 (tensor parallel)
+Generation:      50 tokens per request
+Warmup:          5 requests
+Iterations:      3 per concurrency level
+Concurrency:     [1, 2, 4, 8, 16, 32, 64, 128, 256]
+
+Server health check: OK
+
+Warming up with 5 requests...
+  Warmup 1: 50 tokens in 1.346s
+  Warmup 2: 50 tokens in 1.296s
+  Warmup 3: 50 tokens in 1.295s
+  Warmup 4: 50 tokens in 1.295s
+  Warmup 5: 50 tokens in 1.296s
+
+── Concurrency 1 ──
+  Total: 38.6 tok/s | Per-sample: 38.6 tok/s | Latency mean: 1.295s p95: 1.295s
+
+── Concurrency 2 ──
+  Total: 68.1 tok/s | Per-sample: 34.1 tok/s | Latency mean: 1.455s p95: 1.468s
+
+── Concurrency 4 ──
+  Total: 112.0 tok/s | Per-sample: 28.0 tok/s | Latency mean: 1.777s p95: 1.785s
+
+── Concurrency 8 ──
+  Total: 165.1 tok/s | Per-sample: 20.6 tok/s | Latency mean: 2.417s p95: 2.423s
+
+── Concurrency 16 ──
+  Total: 218.3 tok/s | Per-sample: 13.6 tok/s | Latency mean: 3.660s p95: 3.665s
+
+── Concurrency 32 ──
+  Total: 267.3 tok/s | Per-sample: 8.4 tok/s | Latency mean: 5.982s p95: 5.986s
+
+── Concurrency 64 ──
+  Total: 303.6 tok/s | Per-sample: 4.7 tok/s | Latency mean: 10.536s p95: 10.539s
+
+── Concurrency 128 ──
+  Total: 312.1 tok/s | Per-sample: 2.4 tok/s | Latency mean: 20.498s p95: 20.502s
+
+── Concurrency 256 ──
+  Total: 316.5 tok/s | Per-sample: 1.2 tok/s | Latency mean: 40.280s p95: 40.437s
+
+
+========================================================================================================================
+RESULTS: QWEN 2.5 14B (TP=2, 2x RTX 3090)
+========================================================================================================================
+
+  Conc |  14B Total  14B/Sample |  Mean Lat   P95 Lat |  vs W4 3B  vs W1 TF
+------------------------------------------------------------------------------------------------------------------------
+     1 |     38.6        38.6   |    1.295s    1.295s |     0.36x     0.46x
+     2 |     68.1        34.1   |    1.455s    1.468s |         —         —
+     4 |    112.0        28.0   |    1.777s    1.785s |         —         —
+     8 |    165.1        20.6   |    2.417s    2.423s |         —     0.27x
+    16 |    218.3        13.6   |    3.660s    3.665s |         —         —
+    32 |    267.3         8.4   |    5.982s    5.986s |         —         —
+    64 |    303.6         4.7   |   10.536s   10.539s |         —     0.09x
+   128 |    312.1         2.4   |   20.498s   20.502s |         —     0.07x
+   256 |    316.5         1.2   |   40.280s   40.437s |         —     0.07x
+
+========================================================================================================================
+KEY METRICS
+========================================================================================================================
+  Single request:    38.6 tok/s (14B on 2 GPUs) vs 106 tok/s (3B on 1 GPU, Week 4)
+  Per-token latency: 25.9 ms/tok
+  Peak throughput:   316.5 tok/s at concurrency=256
+  vs Week 1 ceiling: 0.06x over transformers 3B peak
+  vs Week 4 peak:    0.05x over vLLM 3B single-GPU peak
+  Per-sample ≥20:    Up to concurrency=8
+
+  KV Cache comparison:
+    Llama 3.2 3B:   112 KB/token, 13.97 GiB pool, ~130K token capacity
+    Qwen 2.5 14B:   192 KB/token, 5.81 GiB pool, 63,440 token capacity
+    Memory ratio:    1.71x more per token, 2.05x less total capacity
