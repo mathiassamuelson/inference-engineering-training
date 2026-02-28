@@ -1,195 +1,234 @@
-## **Training Plan: NVIDIA Stack → AI Engineering/Product Management**
+# Training Plan: NVIDIA Stack → AI Engineering/Product Management (Revised)
 
-### **Phase 1: Foundation (Weeks 1-4)**
+*Last updated: February 24, 2026 — reflects actual progress through Week 4*
 
-*Goal: Master the core NVIDIA inference stack on your hardware*
+---
 
-**Week 1-2: NVIDIA Compute Platform Fundamentals**
+## Phase 1: Foundation & Baselines (Weeks 1-4) ✅ Complete
 
-* **Install and benchmark:**  
-  * TensorRT for optimized inference  
-  * CUDA-X libraries (cuDNN, cuBLAS)  
-  * NVIDIA System Management Interface (NSYS, nvidia-smi profiling)  
-* **Hands-on project:** Benchmark the same model (Llama 3.2 3B) across PyTorch native, TensorRT, and quantized versions. Document throughput, latency, memory usage across both GPUs  
-* **Deliverable:** Performance comparison spreadsheet \+ understanding of when each approach wins
+*Goal: Establish baseline measurements, understand hardware constraints, and validate the need for production inference frameworks*
 
-**Week 3-4: Multi-GPU Orchestration**
+### Week 1: Inference Baselines & Capacity Analysis ✅
 
-* **Learn:**  
-  * CUDA streams and async execution  
-  * Model parallelism vs data parallelism  
-  * GPU memory management and profiling  
-* **Hands-on project:** Run Nemotron-70B using tensor parallelism across both 3090s  
-* **Deliverable:** Working inference setup \+ documentation of memory distribution patterns
+- Benchmarked Llama 3.2 3B on transformers library (FP32, FP16, multi-GPU)
+- Batch size scaling sweep (1 → 1200)
+- Memory model with linear regression (R² = 0.9999)
+- **Key findings:** FP16 gives 1.56x speedup (memory-bandwidth limited, not compute). Throughput plateaus at ~5,000 tok/s total regardless of batch size — 95% per-sample degradation. Theoretical capacity (1,200 users) vs practical capacity (100-150 users) gap. Small models don't benefit from multi-GPU with transformers
+- **Hardware:** 2x RTX 3090
 
-### **Phase 2: Production Inference Stack (Weeks 5-8)**
+### Week 2: TensorRT Optimization Pipeline ✅
 
-*Goal: Build production-grade inference capabilities*
+- Established PyTorch → ONNX → TensorRT conversion pipeline
+- Benchmarked SimpleNet (1M params): 1.17x speedup (overhead-dominated at 30μs inference)
+- Attempted Llama 3.2 3B: ONNX export OOM (>60GB RAM needed for tied weight duplication)
+- Llama 3.2 1B via Optimum: TensorRT *slower* than PyTorch (81 vs 183 tok/s) due to CPU device placement
+- Evaluated TensorRT-LLM: blocked by CUDA 13 requirement
+- **Key finding:** Generic ONNX/TensorRT pipelines don't work for LLMs. Production optimization requires purpose-built frameworks that manage device placement, KV cache, and memory at the framework level
+- **Hardware:** 4x RTX 3090 (GPUs 3-4 installed this week)
 
-**Week 5-6: NVIDIA Triton Inference Server**
+### Week 3: Multi-GPU Orchestration & Hardware Topology ✅
 
-* **Setup:** Deploy Triton on your rig with model repository  
-* **Learn:**  
-  * Dynamic batching strategies  
-  * Model ensembles and pipelines  
-  * Prometheus metrics integration  
-* **Hands-on project:** Deploy 3 models simultaneously (embedding, classification, generation) with auto-scaling batch sizes  
-* **Deliverable:** Multi-model inference API with performance monitoring
+- Discovered critical PCIe topology: GPU 0 on PCIe 4.0 x16 (~25 GB/s), GPUs 1-3 on PCIe 3.0 x1 (~1 GB/s)
+- Data parallelism: 93.6% scaling efficiency at 4 GPUs (batch=32), 7,422 tok/s total
+- Pipeline parallelism: 8-18% throughput loss from synchronization overhead
+- CUDA streams: 99.8% cross-GPU concurrent efficiency; multi-stream same-GPU only 11.6% improvement
+- Ring all-reduce: 378.9ms for 32MB — tensor parallelism completely unviable on PCIe x1
+- **Key finding:** Data parallelism is the only viable multi-GPU strategy on this hardware. PCIe x1 has zero impact on inference once models are GPU-resident. Tensor parallelism requires NVLink
+- **Hardware:** 4x RTX 3090, Gigabyte B650 Eagle AX topology mapped
 
-**Week 7-8: vLLM and Advanced Batching**
+### Week 4: vLLM Single-GPU Fundamentals ✅
 
-* **Install vLLM** with PagedAttention  
-* **Compare:** Triton vs vLLM for LLM inference  
-* **Hands-on project:** Build a chatbot backend using vLLM with request queuing and continuous batching  
-* **Deliverable:** Load test results showing concurrent user capacity
+- Installed vLLM 0.13.0 (V1 engine), verified PagedAttention, CUDA graphs, fused kernels at startup
+- Single-GPU throughput: ~1.3x improvement over transformers baseline (modest for small model)
+- Concurrent user simulation demonstrating continuous batching and graceful degradation
+- PagedAttention memory analysis: 112 KB/token (vs 260 KB measured in Week 1, vs 344 KB incorrect MHA calculation)
+- Corrected Week 1 KV cache calculation: Llama 3.2 3B uses GQA with 8 KV heads (not 24), giving 3:1 ratio
+- SLA-driven capacity planning: memory says 1,200 users, throughput says 100-150, SLA (p95 < 2s) says ~25
+- **Key finding:** vLLM's value for small models is primarily operational (request queuing, graceful degradation, memory efficiency) rather than raw throughput. The transformative capabilities compound with model size, context length, and deployment complexity
 
-### **Phase 3: Optimization & Quantization (Weeks 9-12)**
+---
 
-*Goal: Master model optimization techniques*
+## Phase 2: Production Inference at Scale (Weeks 5-8)
 
-**Week 9-10: Model Compression**
+*Goal: Master multi-GPU production serving, larger models, and multi-model orchestration*
 
-* **Learn:**  
-  * TensorRT quantization (INT8, FP16)  
-  * AWQ, GPTQ quantization methods  
-  * NVIDIA's Megatron-LM model optimization  
-* **Hands-on project:** Take Nemotron-14B from 32GB → fit on single 24GB 3090 via quantization, measure quality degradation  
-* **Deliverable:** Quality vs performance tradeoff analysis
+### Week 5: vLLM Multi-GPU & Sustained Load Testing ✅
 
-**Week 11-12: Custom CUDA Kernels**
+- Deployed vLLM with data parallelism across 4 GPUs (separate vLLM instances per GPU)
+- Measured **7.12x throughput advantage** over transformers — the largest single performance improvement in the training program, purely from framework architecture
+- Sustained load testing confirmed throughput stability over extended runs with no memory fragmentation or degradation
+- Mixed workload continuous batching: fair compute sharing between short and long requests, latency isolation, graceful degradation under overload
+- Benchmarked Mistral 7B Instruct v0.3 on single GPU, confirming vLLM advantages scale with model size
+- Production metrics: p50/p95/p99 latency under sustained concurrent load
+- **Key finding:** Framework architecture dominates all other optimization axes — more impactful than FP16 optimization (1.56x), TensorRT conversion, or multi-GPU scaling. vLLM's operational qualities (request queuing, continuous batching, graceful degradation) proved stable and production-ready under sustained load
+- **Models tested:** Llama 3.2 3B Instruct (multi-GPU), Mistral 7B Instruct v0.3 (single GPU)
 
-* **Learn:**  
-  * CUDA programming basics (thrust library)  
-  * Write simple custom operations  
-  * Profile with NSight Compute  
-* **Hands-on project:** Implement a custom preprocessing kernel (tokenization or batching logic) that's faster than CPU  
-* **Deliverable:** Benchmark showing kernel speedup
+### Week 6: Larger Model Scaling & Triton Introduction
 
-### **Phase 4: AI Engineering Projects (Weeks 13-16)**
+- Scale to larger models across multiple GPUs: Qwen 2.5 14B across 2 GPUs, measure whether the 7x framework advantage grows with model size
+- Compare single-GPU 7B serving vs multi-GPU 14B serving: throughput, latency, cost-per-token tradeoffs
+- Begin Triton Inference Server setup: install, configure model repository, deploy a non-LLM model (embedding or classification) to learn Triton fundamentals separately from vLLM
+- **Deliverable:** Model size scaling analysis answering "at what model size does vLLM's advantage grow beyond 7x?" and initial Triton deployment
 
-*Goal: Build portfolio-worthy applications*
+### Week 7: Triton Inference Server
+
+- Deploy Triton with model repository (embedding model + generation model)
+- Dynamic batching configuration and measurement
+- Multi-model serving: simultaneous models on different GPUs
+- Prometheus metrics integration for monitoring
+- **Deliverable:** Multi-model inference API with performance monitoring
+
+### Week 8: Triton vs vLLM Comparison & Framework Decision Matrix
+
+- Head-to-head comparison: Triton vs vLLM for LLM serving (latency, throughput, operational features)
+- Triton model ensembles: preprocessing → generation → postprocessing pipeline
+- Build framework decision matrix: when to use Triton vs vLLM vs both (Triton + vLLM backend)
+- **Deliverable:** Framework selection guide with measured data from this hardware
+
+### NVLink Side Experiments (When Bridge Arrives)
+
+- Re-run Week 3 topology benchmark: NVLink bandwidth vs PCIe
+- Tensor parallelism within vLLM across GPU 0+1 NVLink pair
+- Compare: NVLink tensor parallel vs single GPU vs data parallel
+- Load 70B model (Nemotron or Llama 3.1 70B) across NVLink pair + remaining GPUs
+- **Deliverable:** NVLink vs PCIe analysis, tensor parallelism viability assessment
+
+---
+
+## Phase 3: Optimization & Quantization (Weeks 9-12)
+
+*Goal: Master model compression and optimization techniques*
+
+### Week 9: Quantization Methods (AWQ, GPTQ)
+
+- Apply AWQ and GPTQ quantization to Llama 3.2 3B and a 7-14B model
+- Measure quality degradation: perplexity, generation coherence, task accuracy
+- Benchmark INT4/INT8 vs FP16: throughput, latency, memory savings
+- **Deliverable:** Quality vs performance tradeoff analysis across quantization methods
+
+### Week 10: Quantized Model Serving with vLLM
+
+- Serve quantized models through vLLM: measure end-to-end production impact
+- Capacity planning with quantization: how many more concurrent users per GPU?
+- Fit larger models on single GPU via quantization (14B quantized vs 3B full precision)
+- **Deliverable:** Quantization deployment guide with production capacity numbers
+
+### Week 11: Model Optimization Deep Dive
+
+- TensorRT-LLM integration with vLLM (if CUDA compatibility resolved)
+- Speculative decoding: use small draft model to accelerate large model generation
+- KV cache compression techniques
+- **Deliverable:** Advanced optimization techniques benchmark
+
+### Week 12: Profiling & Performance Analysis
+
+- NSight Compute profiling of inference workloads
+- Identify remaining bottlenecks: memory bandwidth utilization, kernel efficiency
+- Compare profiling results across frameworks (transformers vs vLLM vs Triton)
+- **Deliverable:** Performance profiling report with optimization recommendations
+
+---
+
+## Phase 4: AI Engineering Projects (Weeks 13-16)
+
+*Goal: Build portfolio-worthy applications using skills from Phases 1-3*
 
 **Choose 2 of 3 projects:**
 
-**Project A: RAG System with Vector Search**
+### Project A: RAG System with GPU-Accelerated Vector Search
 
-* Use NVIDIA RAPIDS cuVS for GPU-accelerated vector search  
-* Implement semantic search over technical documentation  
-* Deploy with Triton \+ vector DB (Milvus/Qdrant)  
-* **Deliverable:** Working RAG API with sub-100ms retrieval
+- Implement semantic search over technical documentation
+- Use embedding model on one GPU, generation model on others
+- Deploy with vLLM or Triton + vector DB (Milvus/Qdrant)
+- **Deliverable:** Working RAG API with sub-100ms retrieval
 
-**Project B: Real-time Video Analytics**
+### Project B: Multi-Model Routing Service
 
-* Use NVIDIA DeepStream SDK \+ TensorRT  
-* Build person detection \+ tracking pipeline  
-* Process webcam feed at 30fps  
-* **Deliverable:** Live demo with visualization
+- Automatic query routing based on complexity (small model for simple queries, large model for complex)
+- Cost tracking per request
+- A/B testing framework for model comparison
+- **Deliverable:** Intelligent model router with cost/quality tradeoff dashboard
 
-**Project C: Fine-tuning Pipeline**
+### Project C: Fine-tuning Pipeline
 
-* Use NVIDIA NeMo Framework  
-* Fine-tune Llama 3.2 3B on domain-specific data  
-* Implement LoRA/QLoRA for efficient training  
-* **Deliverable:** Comparison of base vs fine-tuned model performance
+- Fine-tune Llama 3.2 3B on domain-specific data using LoRA/QLoRA
+- Compare base vs fine-tuned model performance
+- Deploy fine-tuned model through production serving pipeline
+- **Deliverable:** End-to-end fine-tuning and deployment pipeline
 
-### **Phase 5: AI Product Management Track (Weeks 17-20)**
+---
 
-*Goal: Translate technical skills into product insights*
+## Phase 5: Production Operations & Cost Modeling (Weeks 17-20)
 
-**Week 17-18: Infrastructure Cost Modeling**
+*Goal: Translate technical skills into production and product insights*
 
-* **Build:** TCO calculator for inference deployments  
-* **Analyze:** Your 2x RTX 3090 rig vs cloud alternatives (Lambda Labs, Runpod, AWS)  
-* **Model:** Break-even analysis for different usage patterns  
-* **Deliverable:** Excel/Sheets calculator with real benchmarks from your hardware
+### Week 17-18: Infrastructure Cost Modeling
 
-**Week 19: Latency-Quality Trade-off Framework**
+- Build TCO calculator for inference deployments
+- Compare: 4x RTX 3090 rig vs cloud alternatives (Lambda Labs, RunPod, AWS)
+- Break-even analysis for different usage patterns
+- **Deliverable:** Interactive cost calculator with real benchmarks from this hardware
 
-* **Document:** How quantization, batching, caching affect user experience  
-* **Create:** Decision framework for model selection (when to use 3B vs 14B vs 70B)  
-* **Deliverable:** Product brief: "Model Selection Guide for \[Use Case\]"
+### Week 19: Observability & Reliability
 
-**Week 20: Observability & Reliability**
+- Full monitoring stack (Prometheus + Grafana)
+- Track SLA-relevant metrics (p50/p95/p99 latency, throughput, error rates)
+- Simulate failure scenarios and recovery
+- **Deliverable:** Production monitoring dashboard and reliability playbook
 
-* **Implement:** Full monitoring stack (Prometheus \+ Grafana)  
-* **Track:** SLA-relevant metrics (p50/p95/p99 latency, throughput, error rates)  
-* **Simulate:** Failure scenarios and recovery  
-* **Deliverable:** "Production Readiness Checklist" for LLM deployments
+### Week 20: Latency-Quality Tradeoff Framework
 
-### **Phase 6: Capstone & Portfolio (Weeks 21-24)**
+- Document how quantization, batching, caching, and model size affect user experience
+- Create decision framework for model selection (when to use 3B vs 7B vs 14B vs 70B)
+- **Deliverable:** Model selection guide with measured data from this hardware
+
+---
+
+## Phase 6: Capstone & Portfolio (Weeks 21-24)
 
 *Goal: Demonstrate end-to-end capability*
 
-**Build one comprehensive project that shows both engineering and product thinking:**
+**Build one comprehensive project combining engineering and product thinking:**
 
-**Recommended: "Enterprise RAG Platform"**
+### Recommended: "Enterprise Inference Platform"
 
-* Multi-tenant document ingestion and indexing  
-* GPU-accelerated semantic search  
-* Multiple model sizes with automatic routing based on query complexity  
-* Cost tracking per tenant  
-* Admin dashboard showing utilization, costs, latency distribution
+- Multi-model serving with automatic routing based on query complexity
+- GPU-accelerated semantic search for document retrieval
+- Cost tracking per request/tenant
+- Full observability stack with SLA monitoring
+- Admin dashboard showing utilization, costs, latency distribution
+- Production deployment with graceful degradation and auto-scaling
 
-**OR: "Developer Tools AI Assistant"**
+**Deliverable:** Full documentation including technical architecture diagram, performance benchmarks, cost analysis, and demo.
 
-* Code review assistant using CodeLlama/Nemotron  
-* Runs locally on your rig, IDE integration  
-* Tracks accuracy metrics on real PRs  
-* Cost comparison vs GitHub Copilot
+---
 
-**Deliverable:** Full documentation including:
-
-* Technical architecture diagram  
-* Performance benchmarks  
-* Cost analysis  
-* Product positioning doc  
-* Demo video
-
-## **Parallel Learning Streams**
+## Parallel Learning Streams
 
 **Throughout all phases:**
 
-**Weekly (1-2 hours):**
-
-* Read NVIDIA technical blogs and GTC talks  
-* Follow NVIDIA AI Enterprise docs  
-* Participate in NVIDIA Developer forums
-
-**Bi-weekly:**
-
-* Write technical blog posts about your learnings  
-* Share benchmarks and findings on LinkedIn/Medium  
-* Contribute to open-source inference tools
-
-**Monthly:**
-
-* Review and update your "AI Infrastructure Knowledge Map"  
-* Practice explaining technical concepts in product terms  
-* Interview prep: mock technical discussions and product case studies
+- Read NVIDIA technical blogs and GTC talks (weekly, 1-2 hours)
+- Write technical blog posts about learnings (bi-weekly)
+- Review and update "AI Infrastructure Knowledge Map" (monthly)
+- Practice explaining technical concepts in product terms (monthly)
 
 ---
 
-## **Key Certifications to Target**
+## Key Changes from Original Plan
 
-* **NVIDIA DLI Certification:** "Building Transformer-Based NLP Applications"  
-* **NVIDIA DLI Certification:** "Building RAG Agents with LLMs"  
-* Consider NVIDIA Inception program for startups/projects
+| Original Plan | Revised Plan | Reason |
+|---|---|---|
+| Weeks 1-2: TensorRT + CUDA-X benchmarks | Week 1: Transformers baselines, Week 2: TensorRT | Baselines needed first to have something to optimize against |
+| Weeks 3-4: Multi-GPU + Nemotron-70B tensor parallelism | Week 3: Multi-GPU topology + data/pipeline parallelism, Week 4: vLLM single-GPU | Tensor parallelism unviable without NVLink; vLLM pulled forward |
+| Weeks 5-6: Triton first | Weeks 5-6: vLLM multi-GPU + sustained load | vLLM continuation is natural; Triton follows in Weeks 7-8 |
+| Weeks 7-8: vLLM | Weeks 7-8: Triton + framework comparison | vLLM already started; Triton and comparison work here instead |
+| NVLink not in original plan | NVLink side experiments when bridge arrives (~Weeks 7-9) | Hardware constraint discovered in Week 3 |
+| Week 11-12: Custom CUDA Kernels | Week 11: Speculative decoding + KV cache compression, Week 12: NSight profiling | More production-relevant than writing custom kernels from scratch |
+| Phase 5: Separate PM track | Phase 5: Integrated operations + cost modeling | Cost modeling benefits from having all benchmark data in hand |
 
 ---
 
-## **Success Metrics by Role Path**
-
-**For AI Engineer roles:**
-
-* 5+ working inference deployments with documented optimizations  
-* Active GitHub with CUDA/inference code  
-* Technical blog with 10+ posts on optimization techniques  
-* Can discuss latency/throughput trade-offs with specific numbers
-
-**For AI Product Manager roles:**
-
-* TCO models comparing inference approaches  
-* Product briefs for 3+ different AI use cases  
-* Framework for AI feasibility assessment  
-* Can translate technical constraints into product decisions
-
+*Training started: January 13, 2026*
+*Current status: Week 4 complete, beginning Week 5*
+*Hardware: 4x RTX 3090 (96GB total), Gigabyte B650 Eagle AX, Ubuntu 24.04, CUDA 12.6*
+*NVLink bridge: On order, ETA ~Weeks 7-9*
