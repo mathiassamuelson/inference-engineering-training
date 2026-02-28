@@ -28,6 +28,7 @@ TOKENIZER_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 # ── Part A: Health & Metadata ──────────────────────────────────────
 
+
 def check_health():
     """Verify Triton server and model are ready."""
     print("=" * 80)
@@ -53,17 +54,22 @@ def check_health():
     print(f"  Max batch:     {config.get('max_batch_size', 'N/A')}")
     print(f"  Inputs:        {[inp['name'] for inp in config.get('input', [])]}")
     print(f"  Outputs:       {[out['name'] for out in config.get('output', [])]}")
-    print(f"  Instance:      GPU {config.get('instance_group', [{}])[0].get('gpus', 'N/A')}")
+    print(
+        f"  Instance:      GPU {config.get('instance_group', [{}])[0].get('gpus', 'N/A')}"
+    )
 
-    db = config.get('dynamic_batching', {})
+    db = config.get("dynamic_batching", {})
     if db:
-        print(f"  Dyn batching:  preferred={db.get('preferred_batch_size', [])}, "
-              f"max_delay={db.get('max_queue_delay_microseconds', 0)}μs")
+        print(
+            f"  Dyn batching:  preferred={db.get('preferred_batch_size', [])}, "
+            f"max_delay={db.get('max_queue_delay_microseconds', 0)}μs"
+        )
     print()
     return True
 
 
 # ── Part B: Single Inference ───────────────────────────────────────
+
 
 def single_inference(tokenizer):
     """Send a single embedding request and validate the output."""
@@ -73,8 +79,9 @@ def single_inference(tokenizer):
     print()
 
     text = "GPU memory bandwidth determines inference throughput"
-    encoded = tokenizer(text, padding="max_length", max_length=128,
-                        truncation=True, return_tensors="np")
+    encoded = tokenizer(
+        text, padding="max_length", max_length=128, truncation=True, return_tensors="np"
+    )
 
     # Build Triton inference request
     payload = {
@@ -83,29 +90,26 @@ def single_inference(tokenizer):
                 "name": "input_ids",
                 "shape": [1, 128],
                 "datatype": "INT64",
-                "data": encoded["input_ids"].tolist()
+                "data": encoded["input_ids"].tolist(),
             },
             {
                 "name": "attention_mask",
                 "shape": [1, 128],
                 "datatype": "INT64",
-                "data": encoded["attention_mask"].tolist()
+                "data": encoded["attention_mask"].tolist(),
             },
             {
                 "name": "token_type_ids",
                 "shape": [1, 128],
                 "datatype": "INT64",
-                "data": encoded["token_type_ids"].tolist()
-            }
+                "data": encoded["token_type_ids"].tolist(),
+            },
         ],
-        "outputs": [
-            {"name": "last_hidden_state"}
-        ]
+        "outputs": [{"name": "last_hidden_state"}],
     }
 
     start = time.perf_counter()
-    resp = requests.post(f"{TRITON_URL}/v2/models/{MODEL_NAME}/infer",
-                         json=payload)
+    resp = requests.post(f"{TRITON_URL}/v2/models/{MODEL_NAME}/infer", json=payload)
     elapsed = time.perf_counter() - start
 
     if resp.status_code != 200:
@@ -125,7 +129,7 @@ def single_inference(tokenizer):
     norm = np.linalg.norm(cls_embedding)
     cls_normalized = [x / norm for x in cls_embedding]
 
-    print(f"  Input text:    \"{text}\"")
+    print(f'  Input text:    "{text}"')
     print(f"  Output shape:  {shape}")
     print(f"  Embedding dim: {embedding_dim}")
     print(f"  CLS norm:      {norm:.4f}")
@@ -137,6 +141,7 @@ def single_inference(tokenizer):
 
 
 # ── Part C: Similarity Test ────────────────────────────────────────
+
 
 def similarity_test(tokenizer):
     """Test that embeddings capture semantic similarity."""
@@ -154,21 +159,37 @@ def similarity_test(tokenizer):
 
     embeddings = []
     for sent in sentences:
-        encoded = tokenizer(sent, padding="max_length", max_length=128,
-                            truncation=True, return_tensors="np")
+        encoded = tokenizer(
+            sent,
+            padding="max_length",
+            max_length=128,
+            truncation=True,
+            return_tensors="np",
+        )
         payload = {
             "inputs": [
-                {"name": "input_ids", "shape": [1, 128], "datatype": "INT64",
-                 "data": encoded["input_ids"].tolist()},
-                {"name": "attention_mask", "shape": [1, 128], "datatype": "INT64",
-                 "data": encoded["attention_mask"].tolist()},
-                {"name": "token_type_ids", "shape": [1, 128], "datatype": "INT64",
-                 "data": encoded["token_type_ids"].tolist()},
+                {
+                    "name": "input_ids",
+                    "shape": [1, 128],
+                    "datatype": "INT64",
+                    "data": encoded["input_ids"].tolist(),
+                },
+                {
+                    "name": "attention_mask",
+                    "shape": [1, 128],
+                    "datatype": "INT64",
+                    "data": encoded["attention_mask"].tolist(),
+                },
+                {
+                    "name": "token_type_ids",
+                    "shape": [1, 128],
+                    "datatype": "INT64",
+                    "data": encoded["token_type_ids"].tolist(),
+                },
             ],
-            "outputs": [{"name": "last_hidden_state"}]
+            "outputs": [{"name": "last_hidden_state"}],
         }
-        resp = requests.post(f"{TRITON_URL}/v2/models/{MODEL_NAME}/infer",
-                             json=payload)
+        resp = requests.post(f"{TRITON_URL}/v2/models/{MODEL_NAME}/infer", json=payload)
         result = resp.json()
         data = result["outputs"][0]["data"]
         dim = result["outputs"][0]["shape"][-1]
@@ -188,8 +209,11 @@ def similarity_test(tokenizer):
         for j in range(len(sentences)):
             sim = np.dot(embeddings[i], embeddings[j])
             print(f"  {sim:.2f}", end="")
-        print(f"  \"{sentences[i][:50]}...\"" if len(sentences[i]) > 50
-              else f"  \"{sentences[i]}\"")
+        print(
+            f'  "{sentences[i][:50]}..."'
+            if len(sentences[i]) > 50
+            else f'  "{sentences[i]}"'
+        )
 
     # Validate: S1-S2 should be high, S1-S3 should be low
     sim_12 = np.dot(embeddings[0], embeddings[1])
@@ -200,41 +224,66 @@ def similarity_test(tokenizer):
     print(f"  GPU bandwidth ↔ VRAM throughput:  {sim_12:.3f} (expect HIGH)")
     print(f"  GPU bandwidth ↔ cooking pasta:    {sim_13:.3f} (expect LOW)")
     print(f"  GPU bandwidth ↔ CUDA tensors:     {sim_14:.3f} (expect MEDIUM)")
-    print(f"  Semantic coherence:               {'PASS ✓' if sim_12 > sim_13 + 0.2 else 'FAIL ✗'}")
+    print(
+        f"  Semantic coherence:               {'PASS ✓' if sim_12 > sim_13 + 0.2 else 'FAIL ✗'}"
+    )
     print()
 
 
 # ── Part D: Dynamic Batching Benchmark ─────────────────────────────
 
+
 async def send_triton_request(session, tokenizer, text, request_id):
     """Send a single async inference request."""
-    encoded = tokenizer(text, padding="max_length", max_length=128,
-                        truncation=True, return_tensors="np")
+    encoded = tokenizer(
+        text, padding="max_length", max_length=128, truncation=True, return_tensors="np"
+    )
     payload = {
         "inputs": [
-            {"name": "input_ids", "shape": [1, 128], "datatype": "INT64",
-             "data": encoded["input_ids"].tolist()},
-            {"name": "attention_mask", "shape": [1, 128], "datatype": "INT64",
-             "data": encoded["attention_mask"].tolist()},
-            {"name": "token_type_ids", "shape": [1, 128], "datatype": "INT64",
-             "data": encoded["token_type_ids"].tolist()},
+            {
+                "name": "input_ids",
+                "shape": [1, 128],
+                "datatype": "INT64",
+                "data": encoded["input_ids"].tolist(),
+            },
+            {
+                "name": "attention_mask",
+                "shape": [1, 128],
+                "datatype": "INT64",
+                "data": encoded["attention_mask"].tolist(),
+            },
+            {
+                "name": "token_type_ids",
+                "shape": [1, 128],
+                "datatype": "INT64",
+                "data": encoded["token_type_ids"].tolist(),
+            },
         ],
-        "outputs": [{"name": "last_hidden_state"}]
+        "outputs": [{"name": "last_hidden_state"}],
     }
 
     start = time.perf_counter()
     try:
-        async with session.post(f"{TRITON_URL}/v2/models/{MODEL_NAME}/infer",
-                                json=payload,
-                                timeout=aiohttp.ClientTimeout(total=30)) as resp:
+        async with session.post(
+            f"{TRITON_URL}/v2/models/{MODEL_NAME}/infer",
+            json=payload,
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
             elapsed = time.perf_counter() - start
             if resp.status != 200:
-                return {"success": False, "latency": elapsed, "error": f"HTTP {resp.status}"}
+                return {
+                    "success": False,
+                    "latency": elapsed,
+                    "error": f"HTTP {resp.status}",
+                }
             await resp.json()
             return {"success": True, "latency": elapsed, "request_id": request_id}
     except Exception as e:
-        return {"success": False, "latency": time.perf_counter() - start,
-                "error": str(e)[:200]}
+        return {
+            "success": False,
+            "latency": time.perf_counter() - start,
+            "error": str(e)[:200],
+        }
 
 
 async def benchmark_dynamic_batching(tokenizer):
@@ -272,8 +321,7 @@ async def benchmark_dynamic_batching(tokenizer):
             iter_results = []
             for iteration in range(num_iterations):
                 tasks = [
-                    send_triton_request(session, tokenizer,
-                                        texts[i % len(texts)], i)
+                    send_triton_request(session, tokenizer, texts[i % len(texts)], i)
                     for i in range(conc)
                 ]
                 wall_start = time.perf_counter()
@@ -287,14 +335,19 @@ async def benchmark_dynamic_batching(tokenizer):
                 latencies = [r["latency"] for r in successful]
                 throughput = len(successful) / wall_elapsed
 
-                iter_results.append({
-                    "throughput": throughput,
-                    "latency_mean": statistics.mean(latencies),
-                    "latency_p95": sorted(latencies)[int(0.95 * len(latencies))]
-                                   if len(latencies) > 1 else latencies[0],
-                    "wall_time": wall_elapsed,
-                    "successful": len(successful),
-                })
+                iter_results.append(
+                    {
+                        "throughput": throughput,
+                        "latency_mean": statistics.mean(latencies),
+                        "latency_p95": (
+                            sorted(latencies)[int(0.95 * len(latencies))]
+                            if len(latencies) > 1
+                            else latencies[0]
+                        ),
+                        "wall_time": wall_elapsed,
+                        "successful": len(successful),
+                    }
+                )
 
             if iter_results:
                 avg_tp = statistics.mean(r["throughput"] for r in iter_results)
@@ -307,10 +360,12 @@ async def benchmark_dynamic_batching(tokenizer):
                     "latency_p95": avg_p95,
                 }
 
-                print(f"  Concurrency {conc:>4}: "
-                      f"{avg_tp:>8.1f} req/s | "
-                      f"mean {avg_lat*1000:>7.1f}ms | "
-                      f"p95 {avg_p95*1000:>7.1f}ms")
+                print(
+                    f"  Concurrency {conc:>4}: "
+                    f"{avg_tp:>8.1f} req/s | "
+                    f"mean {avg_lat*1000:>7.1f}ms | "
+                    f"p95 {avg_p95*1000:>7.1f}ms"
+                )
 
     # Summary
     print()
@@ -321,12 +376,17 @@ async def benchmark_dynamic_batching(tokenizer):
 
         print(f"  Peak throughput:     {peak_tp:.1f} req/s at concurrency={peak_conc}")
         if single_tp:
-            print(f"  Batching speedup:    {peak_tp/single_tp:.1f}x over single request")
-        print(f"  Single-req latency:  {results.get(1, {}).get('latency_mean', 0)*1000:.1f}ms")
+            print(
+                f"  Batching speedup:    {peak_tp/single_tp:.1f}x over single request"
+            )
+        print(
+            f"  Single-req latency:  {results.get(1, {}).get('latency_mean', 0)*1000:.1f}ms"
+        )
     print()
 
 
 # ── Part E: Prometheus Metrics ─────────────────────────────────────
+
 
 def check_metrics():
     """Fetch and display Triton Prometheus metrics."""
@@ -363,6 +423,7 @@ def check_metrics():
 
 
 # ── Main ───────────────────────────────────────────────────────────
+
 
 def main():
     print("=" * 80)
