@@ -1,0 +1,72 @@
+{
+  "experiment": "week7_exp1_nvlink_tp2",
+  "model": "Qwen/Qwen2.5-14B-Instruct",
+  "gpu_pair": "GPU0+GPU2 (NVLink NV4)",
+  "tensor_parallel_size": 2,
+  "output_tokens": 50,
+  "results": [
+    {
+      "concurrency": 1,
+      "throughput_tok_s": 50.3,
+      "p50_latency_s": 0.994,
+      "p95_latency_s": 0.994,
+      "p99_latency_s": 0.994
+    },
+    {
+      "concurrency": 2,
+      "throughput_tok_s": 99.0,
+      "p50_latency_s": 1.01,
+      "p95_latency_s": 1.01,
+      "p99_latency_s": 1.01
+    },
+    {
+      "concurrency": 4,
+      "throughput_tok_s": 196.9,
+      "p50_latency_s": 1.016,
+      "p95_latency_s": 1.016,
+      "p99_latency_s": 1.016
+    },
+    {
+      "concurrency": 8,
+      "throughput_tok_s": 383.0,
+      "p50_latency_s": 1.044,
+      "p95_latency_s": 1.045,
+      "p99_latency_s": 1.045
+    },
+    {
+      "concurrency": 16,
+      "throughput_tok_s": 716.6,
+      "p50_latency_s": 1.117,
+      "p95_latency_s": 1.117,
+      "p99_latency_s": 1.117
+    },
+    {
+      "concurrency": 32,
+      "throughput_tok_s": 1202.5,
+      "p50_latency_s": 1.331,
+      "p95_latency_s": 1.331,
+      "p99_latency_s": 1.331
+    },
+    {
+      "concurrency": 64,
+      "throughput_tok_s": 2137.2,
+      "p50_latency_s": 1.497,
+      "p95_latency_s": 1.498,
+      "p99_latency_s": 1.498
+    },
+    {
+      "concurrency": 128,
+      "throughput_tok_s": 2706.0,
+      "p50_latency_s": 2.365,
+      "p95_latency_s": 2.367,
+      "p99_latency_s": 2.367
+    },
+    {
+      "concurrency": 256,
+      "throughput_tok_s": 2691.8,
+      "p50_latency_s": 4.76,
+      "p95_latency_s": 4.764,
+      "p99_latency_s": 4.764
+    }
+  ]
+}
