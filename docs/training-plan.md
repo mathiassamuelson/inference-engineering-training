@@ -1,6 +1,6 @@
 # Training Plan: NVIDIA Stack → AI Engineering/Product Management (Revised)
 
-*Last updated: February 24, 2026 — reflects actual progress through Week 4*
+*Last updated: March 10, 2026 — reflects actual progress through Week 7*
 
 ---
 
@@ -33,8 +33,8 @@
 - Pipeline parallelism: 8-18% throughput loss from synchronization overhead
 - CUDA streams: 99.8% cross-GPU concurrent efficiency; multi-stream same-GPU only 11.6% improvement
 - Ring all-reduce: 378.9ms for 32MB — tensor parallelism completely unviable on PCIe x1
-- **Key finding:** Data parallelism is the only viable multi-GPU strategy on this hardware. PCIe x1 has zero impact on inference once models are GPU-resident. Tensor parallelism requires NVLink
-- **Hardware:** 4x RTX 3090, Gigabyte B650 Eagle AX topology mapped
+- **Key finding:** Data parallelism is the only viable multi-GPU strategy on this hardware without NVLink. PCIe x1 has zero impact on inference once models are GPU-resident
+- **Hardware:** 4x RTX 3090
 
 ### Week 4: vLLM Single-GPU Fundamentals ✅
 
@@ -60,38 +60,36 @@
 - Mixed workload continuous batching: fair compute sharing between short and long requests, latency isolation, graceful degradation under overload
 - Benchmarked Mistral 7B Instruct v0.3 on single GPU, confirming vLLM advantages scale with model size
 - Production metrics: p50/p95/p99 latency under sustained concurrent load
-- **Key finding:** Framework architecture dominates all other optimization axes — more impactful than FP16 optimization (1.56x), TensorRT conversion, or multi-GPU scaling. vLLM's operational qualities (request queuing, continuous batching, graceful degradation) proved stable and production-ready under sustained load
+- **Key finding:** Framework architecture dominates all other optimization axes — more impactful than FP16 optimization (1.56x), TensorRT conversion, or multi-GPU scaling
 - **Models tested:** Llama 3.2 3B Instruct (multi-GPU), Mistral 7B Instruct v0.3 (single GPU)
 
-### Week 6: Larger Model Scaling & Triton Introduction
+### Week 6: Larger Model Scaling & Triton Introduction ✅
 
-- Scale to larger models across multiple GPUs: Qwen 2.5 14B across 2 GPUs, measure whether the 7x framework advantage grows with model size
-- Compare single-GPU 7B serving vs multi-GPU 14B serving: throughput, latency, cost-per-token tradeoffs
-- Begin Triton Inference Server setup: install, configure model repository, deploy a non-LLM model (embedding or classification) to learn Triton fundamentals separately from vLLM
-- **Deliverable:** Model size scaling analysis answering "at what model size does vLLM's advantage grow beyond 7x?" and initial Triton deployment
+- Scaled to Qwen 2.5 14B with TP=2 across GPU0+GPU1 (PCIe): 316.5 tok/s peak — severe throughput cliff vs 7B
+- 7B vs 14B economics: 19.69x cost-per-token penalty for 14B over 7B at peak load (later revised — see Week 7)
+- Deployed embedding model on Triton Inference Server with dynamic batching: 23.2 req/s peak, 3.5x batching speedup
+- Prometheus metrics integration for Triton
+- **Key finding (revised by Week 7):** The 14B throughput collapse was caused by PCIe x1 all-reduce overhead, not model size per se. The finding that "14B has steep cost curves" was specific to PCIe-connected tensor parallelism
+- **Models tested:** Qwen 2.5 14B Instruct (TP=2 PCIe), sentence-transformers/all-MiniLM-L6-v2 (Triton)
 
-### Week 7: Triton Inference Server
+### Week 7: NVLink Tensor Parallelism ✅
 
-- Deploy Triton with model repository (embedding model + generation model)
-- Dynamic batching configuration and measurement
-- Multi-model serving: simultaneous models on different GPUs
-- Prometheus metrics integration for monitoring
-- **Deliverable:** Multi-model inference API with performance monitoring
+- Installed AORUS NVLink bridge; topology verified: GPU0 ↔ GPU2 (NV4, ~100 GB/s bidirectional)
+- Reran Qwen 2.5 14B TP=2 on NVLink pair (GPU0+GPU2): **3,018 tok/s peak** vs 316.5 tok/s on PCIe — **9.53x improvement**
+- Concurrency sweep confirmed compute saturation at concurrency 128 (correct bottleneck)
+- Latency distribution (30 trials, concurrency 128): mean 2.364s, stdev 0.015s, p50→p99 spread 35ms (0.6% CV)
+- Output length sweep: throughput rises 2,279 → 3,018 tok/s from 25→200 output tokens (prefill amortization)
+- **Key finding:** NVLink transforms tensor parallelism from communication-bottlenecked to compute-saturated. The Week 6 PCIe results were measuring interconnect overhead, not model capability. Qwen 2.5 14B on NVLink TP=2 is a viable production serving configuration
+- **Models tested:** Qwen 2.5 14B Instruct (TP=2 NVLink, GPU0+GPU2)
 
-### Week 8: Triton vs vLLM Comparison & Framework Decision Matrix
+### Week 8: Triton Inference Server Deep Dive & Framework Comparison
 
-- Head-to-head comparison: Triton vs vLLM for LLM serving (latency, throughput, operational features)
-- Triton model ensembles: preprocessing → generation → postprocessing pipeline
-- Build framework decision matrix: when to use Triton vs vLLM vs both (Triton + vLLM backend)
-- **Deliverable:** Framework selection guide with measured data from this hardware
-
-### NVLink Side Experiments (When Bridge Arrives)
-
-- Re-run Week 3 topology benchmark: NVLink bandwidth vs PCIe
-- Tensor parallelism within vLLM across GPU 0+1 NVLink pair
-- Compare: NVLink tensor parallel vs single GPU vs data parallel
-- Load 70B model (Nemotron or Llama 3.1 70B) across NVLink pair + remaining GPUs
-- **Deliverable:** NVLink vs PCIe analysis, tensor parallelism viability assessment
+- **Triton multi-model serving:** deploy embedding model + generation model simultaneously across GPUs, measure operational overhead
+- **Dynamic batching optimization:** systematic tuning of batch sizes, queue delays, and instance counts
+- **Prometheus metrics integration:** production observability for multi-model Triton deployment
+- **NVLink TP=2 vs 4-GPU data parallel comparison:** NVLink 14B (2 GPUs) vs data parallel 3B (4 GPUs) — direct quality vs. concurrency tradeoff measurement
+- **Framework decision matrix:** when to use Triton vs vLLM vs both (Triton + vLLM backend)
+- **Deliverable:** Multi-model inference API with performance monitoring + framework selection guide with measured data
 
 ---
 
@@ -110,68 +108,79 @@
 
 - Serve quantized models through vLLM: measure end-to-end production impact
 - Capacity planning with quantization: how many more concurrent users per GPU?
-- Fit larger models on single GPU via quantization (14B quantized vs 3B full precision)
-- **Deliverable:** Quantization deployment guide with production capacity numbers
+- **Deliverable:** Quantization deployment guide with measured quality/performance tradeoffs
 
-### Week 11: Model Optimization Deep Dive
+### Week 11: Speculative Decoding & KV Cache Compression
 
-- TensorRT-LLM integration with vLLM (if CUDA compatibility resolved)
-- Speculative decoding: use small draft model to accelerate large model generation
-- KV cache compression techniques
-- **Deliverable:** Advanced optimization techniques benchmark
+- Implement speculative decoding with a draft model (Llama 3.2 1B → 3B)
+- Measure acceptance rate, latency improvement, and throughput impact
+- KV cache compression techniques: sliding window, prefix caching
+- **Deliverable:** Speculative decoding analysis with acceptance rate breakdown
 
-### Week 12: Profiling & Performance Analysis
+### Week 12: NSight Profiling & Bottleneck Analysis
 
-- NSight Compute profiling of inference workloads
-- Identify remaining bottlenecks: memory bandwidth utilization, kernel efficiency
-- Compare profiling results across frameworks (transformers vs vLLM vs Triton)
-- **Deliverable:** Performance profiling report with optimization recommendations
-
----
-
-## Phase 4: AI Engineering Projects (Weeks 13-16)
-
-*Goal: Build portfolio-worthy applications using skills from Phases 1-3*
-
-**Choose 2 of 3 projects:**
-
-### Project A: RAG System with GPU-Accelerated Vector Search
-
-- Implement semantic search over technical documentation
-- Use embedding model on one GPU, generation model on others
-- Deploy with vLLM or Triton + vector DB (Milvus/Qdrant)
-- **Deliverable:** Working RAG API with sub-100ms retrieval
-
-### Project B: Multi-Model Routing Service
-
-- Automatic query routing based on complexity (small model for simple queries, large model for complex)
-- Cost tracking per request
-- A/B testing framework for model comparison
-- **Deliverable:** Intelligent model router with cost/quality tradeoff dashboard
-
-### Project C: Fine-tuning Pipeline
-
-- Fine-tune Llama 3.2 3B on domain-specific data using LoRA/QLoRA
-- Compare base vs fine-tuned model performance
-- Deploy fine-tuned model through production serving pipeline
-- **Deliverable:** End-to-end fine-tuning and deployment pipeline
+- Profile inference workloads with NVIDIA NSight Systems and NSight Compute
+- Identify compute vs memory bandwidth bottlenecks at the kernel level
+- Profile vLLM's PagedAttention and continuous batching kernel execution
+- **Deliverable:** Profiling report identifying top optimization opportunities
 
 ---
 
-## Phase 5: Production Operations & Cost Modeling (Weeks 17-20)
+## Phase 4: Production Systems (Weeks 13-16)
 
-*Goal: Translate technical skills into production and product insights*
+*Goal: Build complete production-grade AI systems*
 
-### Week 17-18: Infrastructure Cost Modeling
+### Week 13: RAG Pipeline — Retrieval Infrastructure
 
-- Build TCO calculator for inference deployments
-- Compare: 4x RTX 3090 rig vs cloud alternatives (Lambda Labs, RunPod, AWS)
-- Break-even analysis for different usage patterns
-- **Deliverable:** Interactive cost calculator with real benchmarks from this hardware
+- Build GPU-accelerated semantic search with FAISS
+- Embedding pipeline: batch encoding, index construction, similarity search
+- Benchmark retrieval latency vs index size
+- **Deliverable:** Working vector search system with throughput benchmarks
 
-### Week 19: Observability & Reliability
+### Week 14: RAG Pipeline — Generation & Evaluation
 
-- Full monitoring stack (Prometheus + Grafana)
+- Integrate retrieval with vLLM generation end-to-end
+- Measure end-to-end latency: retrieval + generation
+- Evaluate answer quality with and without retrieval context
+- **Deliverable:** Complete RAG system with latency and quality measurements
+
+### Week 15: Multi-Model Routing & Orchestration
+
+- Build request router: classify query complexity, route to 3B vs 14B model
+- Measure routing accuracy and latency overhead
+- Cost modeling: savings from routing vs single large model
+- **Deliverable:** Adaptive routing system with cost analysis
+
+### Week 16: Production Hardening
+
+- Request queuing, timeout handling, graceful degradation under overload
+- Health checks, circuit breakers, retry logic
+- Load testing: find failure modes and recovery behavior
+- **Deliverable:** Production-hardened inference service with reliability playbook
+
+---
+
+## Phase 5: Operations & Cost Modeling (Weeks 17-20)
+
+*Goal: Build production operations and business modeling capabilities*
+
+### Week 17: Infrastructure Cost Modeling
+
+- Build TCO calculator for this hardware configuration
+- Compare on-premise (4x RTX 3090) vs cloud alternatives (Lambda Labs, RunPod, AWS)
+- Break-even analysis across usage patterns and model sizes
+- **Deliverable:** Cost modeling framework with measured data from this hardware
+
+### Week 18: Capacity Planning Framework
+
+- Model throughput, memory, and latency constraints together
+- Capacity planning under uncertainty: traffic spikes, model updates
+- SLA definition and measurement: p99 latency budgets, error rate targets
+- **Deliverable:** Capacity planning guide for LLM serving systems
+
+### Week 19: Full Observability Stack
+
+- Deploy Prometheus + Grafana dashboards for all active serving infrastructure
 - Track SLA-relevant metrics (p50/p95/p99 latency, throughput, error rates)
 - Simulate failure scenarios and recovery
 - **Deliverable:** Production monitoring dashboard and reliability playbook
@@ -222,13 +231,13 @@
 | Weeks 3-4: Multi-GPU + Nemotron-70B tensor parallelism | Week 3: Multi-GPU topology + data/pipeline parallelism, Week 4: vLLM single-GPU | Tensor parallelism unviable without NVLink; vLLM pulled forward |
 | Weeks 5-6: Triton first | Weeks 5-6: vLLM multi-GPU + sustained load | vLLM continuation is natural; Triton follows in Weeks 7-8 |
 | Weeks 7-8: vLLM | Weeks 7-8: Triton + framework comparison | vLLM already started; Triton and comparison work here instead |
-| NVLink not in original plan | NVLink side experiments when bridge arrives (~Weeks 7-9) | Hardware constraint discovered in Week 3 |
+| NVLink side experiments (separate track, Weeks 7-9) | NVLink TP=2 benchmark completed in Week 7; comparison integrated into Week 8 | Bridge arrived at start of Week 7; NVLink work absorbed into main curriculum rather than treated as a side project |
 | Week 11-12: Custom CUDA Kernels | Week 11: Speculative decoding + KV cache compression, Week 12: NSight profiling | More production-relevant than writing custom kernels from scratch |
 | Phase 5: Separate PM track | Phase 5: Integrated operations + cost modeling | Cost modeling benefits from having all benchmark data in hand |
 
 ---
 
 *Training started: January 13, 2026*
-*Current status: Week 4 complete, beginning Week 5*
+*Current status: Week 7 complete, beginning Week 8*
 *Hardware: 4x RTX 3090 (96GB total), Gigabyte B650 Eagle AX, Ubuntu 24.04, CUDA 12.6*
-*NVLink bridge: On order, ETA ~Weeks 7-9*
+*NVLink bridge: Installed (AORUS GeForce RTX NVLink, GPU0+GPU2, NV4)*
