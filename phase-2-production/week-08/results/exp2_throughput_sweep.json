@@ -1,0 +1,67 @@
+{
+  "experiment": "week8_exp2_throughput_sweep",
+  "model": "ggml-org/gemma-4-31B-it-GGUF Q8_0",
+  "hardware": "2x RTX 3090 NVLink (GPU 0+2), layer splitting",
+  "framework": "llama.cpp",
+  "output_tokens_per_request": 100,
+  "kv_cache_type": "f16",
+  "context_limit": 104704,
+  "results": [
+    {
+      "target_prompt_tokens": 500,
+      "actual_prompt_tokens": 488,
+      "generated_tokens": 58,
+      "prompt_ms": 2606.213,
+      "generation_ms": 2467.29,
+      "prompt_tok_s": 187.2448644834478,
+      "generation_tok_s": 23.507573086260635,
+      "wall_time_s": 5.08648419380188,
+      "finish_reason": "stop"
+    },
+    {
+      "target_prompt_tokens": 1000,
+      "actual_prompt_tokens": 922,
+      "generated_tokens": 67,
+      "prompt_ms": 3016.32,
+      "generation_ms": 2886.393,
+      "prompt_tok_s": 305.6704858900912,
+      "generation_tok_s": 23.212362280534908,
+      "wall_time_s": 5.915977478027344,
+      "finish_reason": "stop"
+    },
+    {
+      "target_prompt_tokens": 2000,
+      "actual_prompt_tokens": 1804,
+      "generated_tokens": 62,
+      "prompt_ms": 4264.38,
+      "generation_ms": 2728.648,
+      "prompt_tok_s": 423.03922258335325,
+      "generation_tok_s": 22.721875448940278,
+      "wall_time_s": 7.007901430130005,
+      "finish_reason": "stop"
+    },
+    {
+      "target_prompt_tokens": 4000,
+      "actual_prompt_tokens": 1769,
+      "generated_tokens": 60,
+      "prompt_ms": 5691.318,
+      "generation_ms": 2791.91,
+      "prompt_tok_s": 310.8243116972202,
+      "generation_tok_s": 21.49066409733838,
+      "wall_time_s": 8.501274347305298,
+      "finish_reason": "stop"
+    },
+    {
+      "target": 8000,
+      "error": "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+    },
+    {
+      "target": 16000,
+      "error": "HTTPConnectionPool(host='localhost', port=8080): Max retries exceeded with url: /v1/chat/completions (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7441eb088230>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+    },
+    {
+      "target": 32000,
+      "error": "HTTPConnectionPool(host='localhost', port=8080): Max retries exceeded with url: /v1/chat/completions (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7441eb088a70>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+    }
+  ]
+}
