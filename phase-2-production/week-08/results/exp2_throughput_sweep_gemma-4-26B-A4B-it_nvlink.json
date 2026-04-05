@@ -1,0 +1,87 @@
+{
+  "experiment": "week8_exp2_throughput_sweep",
+  "model": "gemma-4-26B-A4B-it Q8_0",
+  "hardware": "2x RTX 3090 NVLink (GPU 0+2), layer splitting",
+  "framework": "llama.cpp",
+  "output_tokens_per_request": 100,
+  "kv_cache_type": "f16",
+  "results": [
+    {
+      "target_prompt_tokens": 500,
+      "actual_prompt_tokens": 518,
+      "generated_tokens": 66,
+      "prompt_ms": 225.88,
+      "generation_ms": 583.116,
+      "prompt_tok_s": 2293.25305471932,
+      "generation_tok_s": 113.185026649929,
+      "wall_time_s": 0.8243169784545898,
+      "finish_reason": "stop"
+    },
+    {
+      "target_prompt_tokens": 1000,
+      "actual_prompt_tokens": 955,
+      "generated_tokens": 94,
+      "prompt_ms": 334.587,
+      "generation_ms": 840.947,
+      "prompt_tok_s": 2854.2651089253322,
+      "generation_tok_s": 111.77874467713184,
+      "wall_time_s": 1.2652087211608887,
+      "finish_reason": "stop"
+    },
+    {
+      "target_prompt_tokens": 2000,
+      "actual_prompt_tokens": 1838,
+      "generated_tokens": 87,
+      "prompt_ms": 563.799,
+      "generation_ms": 804.904,
+      "prompt_tok_s": 3260.027066383587,
+      "generation_tok_s": 108.08742409032631,
+      "wall_time_s": 1.5343997478485107,
+      "finish_reason": "stop"
+    },
+    {
+      "target_prompt_tokens": 4000,
+      "actual_prompt_tokens": 3587,
+      "generated_tokens": 73,
+      "prompt_ms": 1021.18,
+      "generation_ms": 720.126,
+      "prompt_tok_s": 3512.6030670400914,
+      "generation_tok_s": 101.37114893782477,
+      "wall_time_s": 2.052767276763916,
+      "finish_reason": "stop"
+    },
+    {
+      "target_prompt_tokens": 8000,
+      "actual_prompt_tokens": 7088,
+      "generated_tokens": 90,
+      "prompt_ms": 2116.84,
+      "generation_ms": 948.082,
+      "prompt_tok_s": 3348.387218684454,
+      "generation_tok_s": 94.92849774597556,
+      "wall_time_s": 4.1065990924835205,
+      "finish_reason": "stop"
+    },
+    {
+      "target_prompt_tokens": 16000,
+      "actual_prompt_tokens": 14086,
+      "generated_tokens": 65,
+      "prompt_ms": 3327.815,
+      "generation_ms": 673.134,
+      "prompt_tok_s": 4232.807412671677,
+      "generation_tok_s": 96.56324000867583,
+      "wall_time_s": 5.097127676010132,
+      "finish_reason": "stop"
+    },
+    {
+      "target_prompt_tokens": 32000,
+      "actual_prompt_tokens": 28087,
+      "generated_tokens": 87,
+      "prompt_ms": 6753.798,
+      "generation_ms": 937.401,
+      "prompt_tok_s": 4158.697076815149,
+      "generation_tok_s": 92.80980071495551,
+      "wall_time_s": 8.835862159729004,
+      "finish_reason": "stop"
+    }
+  ]
+}
