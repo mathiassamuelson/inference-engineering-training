@@ -19,6 +19,7 @@ import json
 import time
 import requests
 import sys
+import uuid
 
 # --- Configuration ---
 
@@ -36,10 +37,11 @@ TOKENS_PER_FILLER = 16  # Approximate tokens per filler sentence
 
 
 def build_prompt(target_tokens: int) -> str:
-    """Build a prompt of approximately target_tokens length."""
     repeats = max(1, target_tokens // TOKENS_PER_FILLER)
     filler = FILLER_SENTENCE * repeats
+    nonce = uuid.uuid4().hex  # unique per call, ~32 tokens
     prompt = (
+        f"[session {nonce}] "
         f"I am going to give you a block of repeated text. "
         f"After reading it, write a single paragraph summarizing what you observed. "
         f"Here is the text:\n\n{filler}\n\n"
@@ -81,7 +83,7 @@ def extract_timings(response: dict) -> dict:
     usage = response.get("usage", {})
 
     return {
-        "prompt_tokens": timings.get("prompt_n", usage.get("prompt_tokens", 0)),
+        "prompt_tokens": timings.get("prompt_tokens", usage.get("prompt_tokens", 0)),
         "generated_tokens": timings.get(
             "predicted_n", usage.get("completion_tokens", 0)
         ),
