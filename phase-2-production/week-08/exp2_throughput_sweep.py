@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Week 8 Experiment 2: Throughput Sweep — Gemma 4 31B Q8_0 on NVLink (llama.cpp)
+Week 8 Experiment 2: Throughput Sweep — Gemma 4 on NVLink (llama.cpp)
 
 Measures prompt processing speed and generation speed at various context lengths.
 Sends synthetic prompts of increasing size to the llama-server OpenAI-compatible API
@@ -8,9 +8,10 @@ and captures timing data from the response.
 
 Usage:
     python3 exp2_throughput_sweep.py [--host HOST] [--port PORT] [--output-tokens N]
+                                     [--model-name NAME]
 
 Hardware: 2x RTX 3090 (NVLink, GPU 0+2), layer splitting via llama.cpp
-Model: ggml-org/gemma-4-31B-it-GGUF Q8_0 (32.6 GB)
+Default model: ggml-org/gemma-4-31B-it-GGUF Q8_0
 """
 
 import argparse
@@ -23,7 +24,7 @@ import sys
 
 API_BASE = "http://localhost:8080"
 OUTPUT_TOKENS = 100  # Fixed output length for fair comparison
-MODEL_NAME = "gemma-4-31B-it"
+DEFAULT_MODEL_NAME = "gemma-4-31B-it"
 
 # Target prompt sizes in tokens (approximate — actual count comes from API response)
 # We overshoot slightly since token/word ratio varies; the API reports exact counts
@@ -47,11 +48,11 @@ def build_prompt(target_tokens: int) -> str:
     return prompt
 
 
-def send_request(prompt: str, max_tokens: int, api_base: str) -> dict:
+def send_request(prompt: str, max_tokens: int, api_base: str, model_name: str) -> dict:
     """Send a chat completion request and return the full response."""
     url = f"{api_base}/v1/chat/completions"
     payload = {
-        "model": MODEL_NAME,
+        "model": model_name,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "temperature": 1.0,
@@ -97,11 +98,11 @@ def extract_timings(response: dict) -> dict:
     }
 
 
-def run_warmup(api_base: str):
+def run_warmup(api_base: str, model_name: str):
     """Send a short warmup request to prime CUDA graphs and caches."""
     print("Warming up...", flush=True)
     prompt = "Say hello in one sentence."
-    resp = send_request(prompt, max_tokens=20, api_base=api_base)
+    resp = send_request(prompt, max_tokens=20, api_base=api_base, model_name=model_name)
     if "error" in resp:
         print(f"  Warmup failed: {resp['error']}")
         sys.exit(1)
@@ -111,7 +112,7 @@ def run_warmup(api_base: str):
     )
 
 
-def run_sweep(api_base: str, output_tokens: int, targets: list):
+def run_sweep(api_base: str, output_tokens: int, targets: list, model_name: str):
     """Run the throughput sweep across target prompt sizes."""
     results = []
 
@@ -119,7 +120,9 @@ def run_sweep(api_base: str, output_tokens: int, targets: list):
         print(f"Testing ~{target:,} prompt tokens...", end=" ", flush=True)
 
         prompt = build_prompt(target)
-        response = send_request(prompt, max_tokens=output_tokens, api_base=api_base)
+        response = send_request(
+            prompt, max_tokens=output_tokens, api_base=api_base, model_name=model_name
+        )
         metrics = extract_timings(response)
 
         if "error" in metrics:
@@ -152,12 +155,12 @@ def run_sweep(api_base: str, output_tokens: int, targets: list):
     return results
 
 
-def print_summary(results: list, output_tokens: int):
+def print_summary(results: list, output_tokens: int, model_name: str):
     """Print a formatted summary table."""
     print()
     print("=" * 110)
     print(
-        "THROUGHPUT SWEEP RESULTS — Gemma 4 31B Q8_0 | 2x RTX 3090 NVLink | llama.cpp layer splitting"
+        f"THROUGHPUT SWEEP RESULTS — {model_name} Q8_0 | 2x RTX 3090 NVLink | llama.cpp layer splitting"
     )
     print(f"Output tokens per request: {output_tokens}")
     print("=" * 110)
@@ -190,16 +193,15 @@ def print_summary(results: list, output_tokens: int):
     print("=" * 110)
 
 
-def save_results(results: list, output_tokens: int, filepath: str):
+def save_results(results: list, output_tokens: int, filepath: str, model_name: str):
     """Save raw results to JSON."""
     output = {
         "experiment": "week8_exp2_throughput_sweep",
-        "model": "ggml-org/gemma-4-31B-it-GGUF Q8_0",
+        "model": f"{model_name} Q8_0",
         "hardware": "2x RTX 3090 NVLink (GPU 0+2), layer splitting",
         "framework": "llama.cpp",
         "output_tokens_per_request": output_tokens,
         "kv_cache_type": "f16",
-        "context_limit": 104704,
         "results": results,
     }
     with open(filepath, "w") as f:
@@ -208,25 +210,40 @@ def save_results(results: list, output_tokens: int, filepath: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Gemma 4 31B throughput sweep")
+    parser = argparse.ArgumentParser(description="Gemma 4 throughput sweep")
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--output-tokens", type=int, default=OUTPUT_TOKENS)
-    parser.add_argument("--output-file", default="results/exp2_throughput_sweep.json")
+    parser.add_argument(
+        "--model-name",
+        default=DEFAULT_MODEL_NAME,
+        help="Model name used in headers, JSON metadata, and default output filename",
+    )
+    parser.add_argument(
+        "--output-file",
+        default=None,
+        help="Output JSON path. Defaults to results/exp2_throughput_sweep_<model-name>.json",
+    )
     args = parser.parse_args()
 
     api_base = f"http://{args.host}:{args.port}"
+    output_file = (
+        args.output_file
+        or f"results/exp2_throughput_sweep_{args.model_name}.json"
+    )
 
-    print(f"Gemma 4 31B Q8_0 — Throughput Sweep")
+    print(f"{args.model_name} Q8_0 — Throughput Sweep")
     print(f"API: {api_base}")
     print(f"Output tokens per request: {args.output_tokens}")
     print(f"Target prompt sizes: {[f'{t:,}' for t in TARGET_PROMPT_TOKENS]}")
     print()
 
-    run_warmup(api_base)
-    results = run_sweep(api_base, args.output_tokens, TARGET_PROMPT_TOKENS)
-    print_summary(results, args.output_tokens)
-    save_results(results, args.output_tokens, args.output_file)
+    run_warmup(api_base, args.model_name)
+    results = run_sweep(
+        api_base, args.output_tokens, TARGET_PROMPT_TOKENS, args.model_name
+    )
+    print_summary(results, args.output_tokens, args.model_name)
+    save_results(results, args.output_tokens, output_file, args.model_name)
 
 
 if __name__ == "__main__":
