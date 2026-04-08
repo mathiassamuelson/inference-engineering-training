@@ -10,30 +10,11 @@ A few days ago I wrote up deploying @Google DeepMind's Gemma 4 31B Dense on a pa
 
 **Prefill speed: 3.6x at long context, and the advantage grows.** I expected prefill to shrink the MoE discount — my prior was that at prefill batch sizes, enough tokens would route to enough experts that you'd end up activating most of the expert bank anyway and lose the compute savings. That framing was wrong. What matters for prefill FLOPs is `tokens × active_experts_per_token × expert_size`, not `all_experts × expert_size`. Each token still routes to only 8 of 128 experts regardless of batch size, so the MoE discount applies cleanly. The speedup actually grows with context — 2.6x at 500 tokens, 3.6x at 28K — because Gemma 4's hybrid attention (25 of 30 SWA layers with a 1024-token window, 5 global layers) keeps attention nearly linear in context length, so FFN compute continues to dominate even at 28K tokens and the MoE discount keeps applying.
 
-The full throughput sweep, NVLink, single-stream, Q8_0:
+To anchor the curves with concrete numbers (NVLink, single-stream, Q8_0): at ~520 prompt tokens, dense prefill hit 862 tok/s and MoE prefill hit 2,252 tok/s. At ~7,085 tokens, dense was 1,089 and MoE was 4,058. At ~28,085 tokens, dense was 1,158 and MoE was 4,198. Decode held much steadier across context length: dense ran 23.9 → 21.3 → 20.4 tok/s at the same three measurement points, MoE ran 112.0 → 98.3 → 94.1 tok/s. The MoE prefill speedup grew from 2.6x at the shortest sweep point to 3.6x by ~3,500 tokens and held there through 28K. The decode speedup landed in the 4.6–4.7x range at every measured point, with no sequence-length dependence.
 
-| Prompt tokens | Dense prefill (tok/s) | MoE prefill (tok/s) | Prefill speedup | Dense decode (tok/s) | MoE decode (tok/s) | Decode speedup |
-|---:|---:|---:|---:|---:|---:|---:|
-| ~520    |   862 | 2,252 | 2.61x | 23.9 | 112.0 | 4.69x |
-| ~950    |   844 | 2,873 | 3.40x | 23.7 | 112.4 | 4.74x |
-| ~1,835  |   920 | 3,278 | 3.56x | 23.0 | 108.3 | 4.71x |
-| ~3,585  |   947 | 3,537 | 3.73x | 22.1 | 101.3 | 4.58x |
-| ~7,085  | 1,089 | 4,058 | 3.73x | 21.3 |  98.3 | 4.62x |
-| ~14,085 | 1,173 | 4,276 | 3.64x | 20.7 |  96.8 | 4.68x |
-| ~28,085 | 1,158 | 4,198 | 3.63x | 20.4 |  94.1 | 4.61x |
+**The memory story is the most underappreciated finding.** Both models were launched with identical parameters; llama.cpp's `-fit` mode then auto-sized context to fit available VRAM. The dense model was forced to shrink context from Gemma 4's native 262K window down to 104K — it couldn't fit even half the model's capability on 48 GB of consumer VRAM. The MoE runs at the full 262K with 11 GB of headroom. The mechanism is clean: half the layers means half the KV cache per token, and the global attention layers in the MoE use 2 KV heads instead of 4, which halves per-layer memory on exactly the layers where memory matters most. Per-cell KV cost on the MoE is roughly a quarter of the dense model's, which is how 2.5x more context cells fit in half the memory.
 
-**The memory story is the most underappreciated finding.** Both models were launched with identical parameters; llama.cpp's `-fit` mode then auto-sized context to fit available VRAM. The dense model was forced to shrink context from Gemma 4's native 262K window down to 104K — it couldn't fit even half the model's capability on 48 GB of consumer VRAM. The MoE runs at the full 262K with 11 GB of headroom. The mechanism is clean: half the layers means half the KV cache per token, and the global attention layers in the MoE use 2 KV heads instead of 4, which halves per-layer memory on exactly the layers where memory matters most. Per-cell KV cost on the MoE is roughly a quarter of the dense model's, which is how 2.5x more context cells fit in half the memory. Totals from `nvidia-smi`: 45.7 GB used for the dense model at 104K context, 36.3 GB used for the MoE at 262K context.
-
-Memory breakdown at each model's maximum auto-fit context:
-
-| | Dense (104K context) | MoE (262K context) |
-|---|---:|---:|
-| Model weights (GPU, both cards) | 31,109 MiB | 25,601 MiB |
-| Embedding table (CPU-mapped) |  1,428 MiB |    748 MiB |
-| Global attention KV cache     |  8,180 MiB |  5,120 MiB |
-| Sliding-window KV cache       |  3,600 MiB |    900 MiB |
-| Total VRAM used (both cards)  | 45,728 MiB | 36,282 MiB |
-| Free VRAM headroom            |  3,424 MiB | 11,434 MiB |
+In specifics from `nvidia-smi` and the llama.cpp startup logs at each model's maximum auto-fit context: the dense model held 31,109 MiB of weights on the GPU pair plus a 1,428 MiB CPU-mapped embedding table, with KV cache split into 8,180 MiB for the global attention layers and 3,600 MiB for the sliding-window layers. Total VRAM used was 45,728 MiB out of 47,716 MiB available across the two cards — about 3.4 GB free. The MoE held 25,601 MiB of weights and a 748 MiB embedding table; its KV cache was 5,120 MiB on the global layers and 900 MiB on the sliding-window layers. Total VRAM used was 36,282 MiB — about 11.4 GB free. The MoE fits 2.5x more context cells in roughly half the KV cache memory, on the same hardware, with three times the headroom left over.
 
 **The topology finding from the previous post replicated cleanly — with one twist.** Running the same sweep with `CUDA_VISIBLE_DEVICES=0,1` forces the activation handoff across a PCIe 3.0 x1 slot instead of NVLink. On the dense model, this cost ~21% of prefill throughput at 28K tokens and was essentially invisible on decode. On the MoE, prefill took a similar ~24% hit at 28K — the smaller activation payload (hidden dim 2816 vs 5376) was offset by proportionally shorter compute, so the relative cost stayed in the same ballpark. But decode on the MoE showed a consistent ~6% PCIe penalty across every context length, where the dense model's decode was noise-level unaffected. The mechanism is that MoE's faster per-token decode (~10 ms vs ~48 ms) makes fixed PCIe handshake overhead — latency, kernel launch, sync — finally visible as a fraction of the per-token budget. The more general principle: when you accelerate compute, you expose communication costs that were previously hidden. Anyone planning small-active-param deployments on multi-GPU consumer rigs should factor this in.
 
