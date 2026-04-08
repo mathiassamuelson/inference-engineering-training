@@ -1,5 +1,10 @@
 # Week 8, Day 3 — Gemma 4 26B-A4B MoE: Head-to-Head with the Dense Sibling
 
+**Training Program:** RTX 3090 AI Infrastructure — Phase 2: Production Inference at Scale
+**Date:** April 5, 2026
+**Hardware:** 4x RTX 3090 (48GB NVLink pair: GPU 0+2), Ubuntu 24.04, CUDA 12.6
+**Model:** Gemma 4 31B Dense IT (Q8_0 GGUF via llama.cpp)
+
 ## Summary
 
 Deployed Gemma 4 26B-A4B MoE on the NVLink-bridged RTX 3090 pair via llama.cpp and ran the same throughput sweep used for the 31B Dense model on Day 2, plus the PCIe-topology variant. The MoE wins by 4.7x on decode and 3.6x on prefill at long context, and fits Gemma 4's full 262K context window where the dense model was forced to auto-shrink to 104K. A new finding emerged on the PCIe run that was not visible on the dense model: MoE decode shows a consistent ~6% PCIe penalty across every context length, where dense decode was noise-level unaffected. The mechanism is that MoE's faster per-token compute finally makes fixed PCIe handshake overhead visible as a fraction of the per-token budget.

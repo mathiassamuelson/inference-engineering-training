@@ -2,7 +2,7 @@
 
 **Training Program:** RTX 3090 AI Infrastructure — Phase 2: Production Inference at Scale
 **Date:** April 3, 2026
-**Hardware:** 4x RTX 3090 (48GB NVLink pair: GPU 0+2), Ubuntu 24.04, CUDA 13.0
+**Hardware:** 4x RTX 3090 (48GB NVLink pair: GPU 0+2), Ubuntu 24.04, CUDA 12.6
 **Model:** Gemma 4 31B Dense IT (released April 2, 2026 — less than 24 hours old)
 
 ---

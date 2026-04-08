@@ -1,4 +1,4 @@
-# Week 8, Day 2: Gemma 4 26B A4B on vLLM TP=2 over NVLink
+# Week 8, Day 4: Gemma 4 26B A4B on vLLM TP=2 over NVLink
 
 **Date:** April 7, 2026
 **Hardware:** 4x RTX 3090 (96 GB total), Gigabyte B650 Eagle AX, Ubuntu 24.04, CUDA 12.6
@@ -11,7 +11,7 @@
 
 ## Executive Summary
 
-Day 2 set out to close Week 8 by deploying Gemma 4 26B A4B (the MoE variant, 25.2B total / 4B active) on vLLM with tensor parallelism across the NVLink pair. The session walked through **six distinct failure modes** before landing on a working configuration. The headline result is significant: **vLLM holds the full 262,144-token context window with 3.91x concurrency on this hardware**, a configuration llama.cpp could not fit yesterday on the 31B Dense (which auto-shrunk to 104,704 tokens on the same two cards). At a more practical 16,384-token `max-model-len`, the same configuration delivers **24.24x concurrency**, comfortably covering the statmon-ai operational range with substantial headroom.
+Day 4 set out to close Week 8 by deploying Gemma 4 26B A4B (the MoE variant, 25.2B total / 4B active) on vLLM with tensor parallelism across the NVLink pair. The session walked through **six distinct failure modes** before landing on a working configuration. The headline result is significant: **vLLM holds the full 262,144-token context window with 3.91x concurrency on this hardware**, a configuration llama.cpp could not fit yesterday on the 31B Dense (which auto-shrunk to 104,704 tokens on the same two cards). At a more practical 16,384-token `max-model-len`, the same configuration delivers **24.24x concurrency**, comfortably covering the statmon-ai operational range with substantial headroom.
 
 The path to that result is the more important content. Each failure was a real, learnable thing about Day-1 deployment of a brand-new MoE architecture on consumer Ampere hardware. The chain ran: pip resolver wall → pre-quantized FP8 block-shape mismatch → FP8 KV cache hardware incompatibility → Marlin FP8 MoE shape table miss → Triton FP8 MoE quant scheme mismatch → end of user-selectable FP8 backends → AWQ-INT4 pivot success. The cumulative signal is that vLLM serving Gemma 4 26B A4B at TP=2 on consumer Ampere is in genuinely uncharted territory as of today, and the FP8 path simply isn't viable yet on this combination. AWQ-INT4 sidesteps the entire FP8 code path through `compressed-tensors` and works cleanly.
 
