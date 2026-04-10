@@ -19,6 +19,14 @@ Timing methodology:
 Backend-agnostic by construction: the same request/response path is used for both
 backends. The `--backend` flag is recorded in results metadata for provenance, not to
 switch code paths.
+
+Prefix cache avoidance:
+  Each request's prompt is prepended with a short random nonce so that no two requests
+  share a token prefix. This is necessary for backends with automatic cross-request
+  prefix caching (vLLM enables it by default) — without it, repeated iterations of the
+  same prompt are served from the prefix cache and measure KV lookup speed instead of
+  prefill compute. The nonce adds only a handful of tokens, negligible at the prompt
+  sizes this script is designed to measure.
 """
 
 import argparse
@@ -80,15 +88,17 @@ def discover_model_name(endpoint: str, timeout: float = 5.0) -> Optional[str]:
 
 def build_prompt(approx_tokens: int) -> str:
     """
-    Build a prompt of approximately the requested token count.
+    Build a prompt of approximately the requested token count, with a unique nonce
+    prefix to defeat cross-request prefix caching.
 
     Uses a simple repeating filler. The actual token count is captured from the
     server response in each result record — we care about the server's reported
     prompt_tokens, not what we tried to send.
     """
+    nonce = uuid.uuid4().hex[:12]
     word = "lorem "
     words_needed = max(1, int(approx_tokens / 0.75))
-    return (word * words_needed).strip()
+    return (f"{nonce} " + word * words_needed).strip()
 
 
 def run_streaming_request(
@@ -302,12 +312,12 @@ def main():
     results = []
     for size in args.prompt_sizes:
         print(f"[prompt_size={size}]", file=sys.stderr)
-        prompt = build_prompt(size)
 
         for i in range(args.warmup):
             try:
                 run_streaming_request(
-                    args.endpoint, model_name, prompt, args.max_tokens, args.request_timeout,
+                    args.endpoint, model_name, build_prompt(size),
+                    args.max_tokens, args.request_timeout,
                 )
                 print(f"  warmup {i+1}/{args.warmup} ok", file=sys.stderr)
             except Exception as e:
@@ -317,7 +327,8 @@ def main():
         for i in range(args.iterations):
             try:
                 rec = run_streaming_request(
-                    args.endpoint, model_name, prompt, args.max_tokens, args.request_timeout,
+                    args.endpoint, model_name, build_prompt(size),
+                    args.max_tokens, args.request_timeout,
                 )
                 iters.append(rec)
                 print(
@@ -365,6 +376,7 @@ def main():
             "iterations": args.iterations,
             "warmup": args.warmup,
             "request_timeout_s": args.request_timeout,
+            "prompt_generation": "nonce_prefixed",
         },
     }
 
