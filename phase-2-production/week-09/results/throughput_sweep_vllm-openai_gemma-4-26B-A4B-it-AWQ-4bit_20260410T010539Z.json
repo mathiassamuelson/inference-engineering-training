@@ -1,0 +1,147 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "script": {
+      "name": "throughput_sweep.py",
+      "git": {
+        "git_sha": "fd29fa14cdabdc6932ca44694493fc7288799b1d",
+        "dirty": false
+      }
+    },
+    "run": {
+      "run_id": "870d3c7c-fb92-4014-8ba3-64f67a469d82",
+      "timestamp_utc": "2026-04-10T01:05:43.901177+00:00",
+      "hostname": "inference",
+      "platform": "Linux-6.8.0-101-generic-x86_64-with-glibc2.39",
+      "python_version": "3.12.3"
+    },
+    "backend": "vllm-openai",
+    "endpoint": "http://localhost:8000",
+    "model": {
+      "name": "cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit",
+      "source": "discovered"
+    },
+    "sweep_config": {
+      "prompt_sizes_requested": [
+        128,
+        512
+      ],
+      "max_tokens": 64,
+      "iterations": 2,
+      "warmup": 1,
+      "request_timeout_s": 600.0
+    }
+  },
+  "results": [
+    {
+      "prompt_size_requested": 128,
+      "iterations": [
+        {
+          "prompt_tokens": 171,
+          "completion_tokens": 64,
+          "wall_time_s": 0.47721283498685807,
+          "ttft_s": 0.022281602956354618,
+          "prefill_time_s": 0.022281602956354618,
+          "decode_time_s": 0.45493123203050345,
+          "prefill_rate_tok_s": 7674.492734430111,
+          "decode_rate_tok_s": 138.48246847949056
+        },
+        {
+          "prompt_tokens": 171,
+          "completion_tokens": 64,
+          "wall_time_s": 0.475969273946248,
+          "ttft_s": 0.021609996911138296,
+          "prefill_time_s": 0.021609996911138296,
+          "decode_time_s": 0.4543592770351097,
+          "prefill_rate_tok_s": 7913.004370299684,
+          "decode_rate_tok_s": 138.65679250812744
+        }
+      ],
+      "summary": {
+        "wall_time_s": {
+          "mean": 0.47659105446655303,
+          "median": 0.47659105446655303,
+          "min": 0.475969273946248,
+          "max": 0.47721283498685807,
+          "stdev": 0.0008793304446347836
+        },
+        "ttft_s": {
+          "mean": 0.021945799933746457,
+          "median": 0.021945799933746457,
+          "min": 0.021609996911138296,
+          "max": 0.022281602956354618,
+          "stdev": 0.0004748971888583403
+        },
+        "prefill_rate_tok_s": {
+          "mean": 7793.7485523648975,
+          "median": 7793.7485523648975,
+          "min": 7674.492734430111,
+          "max": 7913.004370299684,
+          "stdev": 168.65319511527113
+        },
+        "decode_rate_tok_s": {
+          "mean": 138.569630493809,
+          "median": 138.569630493809,
+          "min": 138.48246847949056,
+          "max": 138.65679250812744,
+          "stdev": 0.12326570277289191
+        }
+      }
+    },
+    {
+      "prompt_size_requested": 512,
+      "iterations": [
+        {
+          "prompt_tokens": 683,
+          "completion_tokens": 64,
+          "wall_time_s": 0.48348047607578337,
+          "ttft_s": 0.02359721204265952,
+          "prefill_time_s": 0.02359721204265952,
+          "decode_time_s": 0.45988326403312385,
+          "prefill_rate_tok_s": 28944.097241880045,
+          "decode_rate_tok_s": 136.99128654410507
+        },
+        {
+          "prompt_tokens": 683,
+          "completion_tokens": 64,
+          "wall_time_s": 0.48284253501333296,
+          "ttft_s": 0.023147622006945312,
+          "prefill_time_s": 0.023147622006945312,
+          "decode_time_s": 0.45969491300638765,
+          "prefill_rate_tok_s": 29506.270656876535,
+          "decode_rate_tok_s": 137.04741605249086
+        }
+      ],
+      "summary": {
+        "wall_time_s": {
+          "mean": 0.48316150554455817,
+          "median": 0.48316150554455817,
+          "min": 0.48284253501333296,
+          "max": 0.48348047607578337,
+          "stdev": 0.000451092451256035
+        },
+        "ttft_s": {
+          "mean": 0.023372417024802417,
+          "median": 0.023372417024802417,
+          "min": 0.023147622006945312,
+          "max": 0.02359721204265952,
+          "stdev": 0.00031790816300741935
+        },
+        "prefill_rate_tok_s": {
+          "mean": 29225.18394937829,
+          "median": 29225.18394937829,
+          "min": 28944.097241880045,
+          "max": 29506.270656876535,
+          "stdev": 397.51663394681754
+        },
+        "decode_rate_tok_s": {
+          "mean": 137.01935129829798,
+          "median": 137.01935129829798,
+          "min": 136.99128654410507,
+          "max": 137.04741605249086,
+          "stdev": 0.03968955600426228
+        }
+      }
+    }
+  ]
+}
