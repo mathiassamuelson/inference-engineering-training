@@ -27,6 +27,14 @@ Prefix cache avoidance:
   same prompt are served from the prefix cache and measure KV lookup speed instead of
   prefill compute. The nonce adds only a handful of tokens, negligible at the prompt
   sizes this script is designed to measure.
+
+Prompt size calibration:
+  At startup, the script sends two small throwaway requests to the server to measure
+  (a) the character-to-token ratio for its filler text under the target model's
+  tokenizer, and (b) the token overhead of the nonce prefix. These measured values
+  are then used to construct prompts that hit the requested token count accurately,
+  rather than relying on a fixed heuristic that systematically misses on many
+  tokenizers. The calibration constants are recorded in results metadata.
 """
 
 import argparse
@@ -86,19 +94,76 @@ def discover_model_name(endpoint: str, timeout: float = 5.0) -> Optional[str]:
         return None
 
 
-def build_prompt(approx_tokens: int) -> str:
+def calibrate_prompt_parameters(
+    endpoint: str,
+    model_name: str,
+    request_timeout: float,
+) -> tuple:
     """
-    Build a prompt of approximately the requested token count, with a unique nonce
+    Measure two calibration constants for the target model's tokenizer by issuing
+    small throwaway completion requests:
+
+      - chars_per_filler_token: how many characters of the filler text ("lorem ")
+        correspond to one token under this tokenizer.
+      - nonce_tokens: how many tokens a nonce prefix (12 hex chars) consumes. A
+        specific sample nonce is used; subsequent nonces should tokenize to roughly
+        the same count, within a token or two of variance.
+
+    Returns (chars_per_filler_token, nonce_tokens). Raises RuntimeError on failure.
+    """
+    url = endpoint.rstrip("/") + "/v1/completions"
+
+    def count_tokens(text: str) -> int:
+        payload = {
+            "model": model_name,
+            "prompt": text,
+            "max_tokens": 1,
+            "temperature": 0.0,
+            "stream": False,
+        }
+        try:
+            resp = requests.post(url, json=payload, timeout=request_timeout)
+            resp.raise_for_status()
+            return resp.json()["usage"]["prompt_tokens"]
+        except (requests.RequestException, KeyError, ValueError) as e:
+            raise RuntimeError(f"Calibration request failed: {e}") from e
+
+    filler_sample = ("lorem " * 500).strip()
+    filler_tokens = count_tokens(filler_sample)
+    if filler_tokens <= 0:
+        raise RuntimeError("Calibration returned zero filler tokens.")
+    chars_per_filler_token = len(filler_sample) / filler_tokens
+
+    sample_nonce = uuid.uuid4().hex[:12]
+    nonce_tokens = count_tokens(sample_nonce)
+
+    return chars_per_filler_token, nonce_tokens
+
+
+def build_prompt(
+    target_tokens: int,
+    chars_per_filler_token: float,
+    nonce_tokens: int,
+) -> str:
+    """
+    Build a prompt of approximately target_tokens tokens, with a unique nonce
     prefix to defeat cross-request prefix caching.
 
-    Uses a simple repeating filler. The actual token count is captured from the
-    server response in each result record — we care about the server's reported
-    prompt_tokens, not what we tried to send.
+    Uses measured calibration constants (see calibrate_prompt_parameters) to size
+    the filler accurately for the target model's tokenizer. The actual token count
+    for each request is captured from the server response in the result record —
+    build_prompt is best-effort, and final analysis should group by actual tokens,
+    not requested tokens.
     """
-    nonce = uuid.uuid4().hex[:12]
+    filler_tokens_needed = max(target_tokens - nonce_tokens, 1)
+    filler_chars_needed = max(int(filler_tokens_needed * chars_per_filler_token), 1)
+
     word = "lorem "
-    words_needed = max(1, int(approx_tokens / 0.75))
-    return (f"{nonce} " + word * words_needed).strip()
+    words_needed = max(1, (filler_chars_needed + len(word) - 1) // len(word))
+    filler = (word * words_needed).strip()
+
+    nonce = uuid.uuid4().hex[:12]
+    return f"{nonce} {filler}"
 
 
 def run_streaming_request(
@@ -300,6 +365,22 @@ def main():
         output_path = Path(args.results_dir) / filename
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Calibrate tokenizer behavior for this model
+    print(f"[info] calibrating tokenizer via {args.endpoint}/v1/completions",
+          file=sys.stderr)
+    try:
+        chars_per_filler_token, nonce_tokens = calibrate_prompt_parameters(
+            args.endpoint, model_name, args.request_timeout,
+        )
+    except RuntimeError as e:
+        print(f"[error] {e}", file=sys.stderr)
+        sys.exit(3)
+    print(
+        f"[info] chars_per_filler_token={chars_per_filler_token:.4f} "
+        f"nonce_tokens={nonce_tokens}",
+        file=sys.stderr,
+    )
+
     # Run header
     print(f"throughput_sweep: backend={args.backend} model={model_name}", file=sys.stderr)
     print(f"  endpoint={args.endpoint}", file=sys.stderr)
@@ -316,7 +397,8 @@ def main():
         for i in range(args.warmup):
             try:
                 run_streaming_request(
-                    args.endpoint, model_name, build_prompt(size),
+                    args.endpoint, model_name,
+                    build_prompt(size, chars_per_filler_token, nonce_tokens),
                     args.max_tokens, args.request_timeout,
                 )
                 print(f"  warmup {i+1}/{args.warmup} ok", file=sys.stderr)
@@ -327,7 +409,8 @@ def main():
         for i in range(args.iterations):
             try:
                 rec = run_streaming_request(
-                    args.endpoint, model_name, build_prompt(size),
+                    args.endpoint, model_name,
+                    build_prompt(size, chars_per_filler_token, nonce_tokens),
                     args.max_tokens, args.request_timeout,
                 )
                 iters.append(rec)
@@ -369,6 +452,10 @@ def main():
         "model": {
             "name": model_name,
             "source": model_source,
+            "tokenizer_calibration": {
+                "chars_per_filler_token": chars_per_filler_token,
+                "nonce_tokens": nonce_tokens,
+            },
         },
         "sweep_config": {
             "prompt_sizes_requested": args.prompt_sizes,
