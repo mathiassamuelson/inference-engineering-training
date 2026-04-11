@@ -11,8 +11,7 @@ Timing methodology:
   - Time-to-first-token (TTFT) is the wall-clock from request send to the first chunk
     containing non-empty text. This is treated as the prefill window.
   - Token counts come from the final chunk's `usage` block (requires
-    `stream_options.include_usage=true`, which vLLM supports natively; llama.cpp-server
-    compatibility should be validated before trusting results from that backend).
+    `stream_options.include_usage=true`, which vLLM and llama.cpp-server both support).
   - Decode rate is (completion_tokens - 1) / (wall_time - ttft): the first generated
     token is produced at TTFT, so only the remaining tokens belong to the decode window.
 
@@ -27,6 +26,20 @@ Prefix cache avoidance:
   same prompt are served from the prefix cache and measure KV lookup speed instead of
   prefill compute. The nonce adds only a handful of tokens, negligible at the prompt
   sizes this script is designed to measure.
+
+  Defense in depth: if the server reports `usage.prompt_tokens_details.cached_tokens`
+  on the final chunk (both vLLM and llama.cpp do), a non-zero value on a measured
+  iteration means the nonce strategy is failing and the result is invalid. The script
+  captures this field into each iteration record and prints a live warning when it
+  occurs.
+
+Server-side timings cross-check:
+  llama.cpp-server emits a top-level `timings` block on the final SSE chunk with
+  server-computed prefill and decode rates (prompt_ms, prompt_per_second, predicted_ms,
+  predicted_per_second). When present, this is captured into the iteration record as
+  `server_timings` and serves as an independent ground-truth cross-check against the
+  script's own wall-clock measurements. vLLM does not emit this block; the field is
+  omitted in that case.
 
 Prompt size calibration:
   At startup, the script sends two small throwaway requests to the server to measure
@@ -54,7 +67,7 @@ import requests
 
 
 BACKENDS = ("llamacpp", "vllm-openai")
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def get_git_info() -> dict:
@@ -177,6 +190,13 @@ def run_streaming_request(
     Issue a streaming completion request and return per-request timing + token counts.
 
     Raises RuntimeError if the response stream does not include a usage block.
+
+    Optional fields captured when the server emits them:
+      - cached_tokens: from usage.prompt_tokens_details.cached_tokens. Non-zero on a
+        measured (post-warmup) iteration indicates the nonce strategy is failing.
+      - server_timings: llama.cpp-server's top-level `timings` block, used as an
+        independent cross-check against the script's wall-clock measurements. vLLM
+        does not emit this block.
     """
     url = endpoint.rstrip("/") + "/v1/completions"
     payload = {
@@ -191,6 +211,7 @@ def run_streaming_request(
     t_start = time.perf_counter()
     t_first_token = None
     usage = None
+    server_timings = None
 
     with requests.post(url, json=payload, stream=True, timeout=timeout) as resp:
         resp.raise_for_status()
@@ -208,6 +229,8 @@ def run_streaming_request(
 
             if chunk.get("usage"):
                 usage = chunk["usage"]
+            if chunk.get("timings"):
+                server_timings = chunk["timings"]
 
             choices = chunk.get("choices") or []
             if choices and t_first_token is None:
@@ -225,6 +248,11 @@ def run_streaming_request(
 
     prompt_tokens = usage["prompt_tokens"]
     completion_tokens = usage["completion_tokens"]
+    cached_tokens = (
+        usage.get("prompt_tokens_details", {}).get("cached_tokens")
+        if isinstance(usage.get("prompt_tokens_details"), dict)
+        else None
+    )
 
     wall_time = t_end - t_start
     if t_first_token is None:
@@ -240,9 +268,10 @@ def run_streaming_request(
     # Subtract 1: the first decoded token is produced at TTFT, not during decode.
     decode_rate = max(completion_tokens - 1, 0) / decode_time
 
-    return {
+    record = {
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
+        "cached_tokens": cached_tokens,
         "wall_time_s": wall_time,
         "ttft_s": ttft,
         "prefill_time_s": prefill_time,
@@ -250,6 +279,9 @@ def run_streaming_request(
         "prefill_rate_tok_s": prefill_rate,
         "decode_rate_tok_s": decode_rate,
     }
+    if server_timings is not None:
+        record["server_timings"] = server_timings
+    return record
 
 
 def summarize(records: list) -> dict:
@@ -414,14 +446,36 @@ def main():
                     args.max_tokens, args.request_timeout,
                 )
                 iters.append(rec)
+
+                # Live cross-check: server-reported rates, if available
+                server_note = ""
+                if rec.get("server_timings"):
+                    st = rec["server_timings"]
+                    sp = st.get("prompt_per_second")
+                    sd = st.get("predicted_per_second")
+                    if sp is not None and sd is not None:
+                        server_note = (
+                            f" | server prefill={sp:.1f} decode={sd:.1f}"
+                        )
+
                 print(
                     f"  iter {i+1}/{args.iterations}: "
                     f"prompt={rec['prompt_tokens']}tok "
                     f"gen={rec['completion_tokens']}tok "
                     f"prefill={rec['prefill_rate_tok_s']:.1f}tok/s "
-                    f"decode={rec['decode_rate_tok_s']:.1f}tok/s",
+                    f"decode={rec['decode_rate_tok_s']:.1f}tok/s"
+                    f"{server_note}",
                     file=sys.stderr,
                 )
+
+                # Live warning: cached_tokens > 0 on a measured iteration means
+                # the nonce strategy is failing.
+                if rec.get("cached_tokens"):
+                    print(
+                        f"  [warn] cached_tokens={rec['cached_tokens']} on measured "
+                        f"iter {i+1} — prefix cache is hitting, result is invalid.",
+                        file=sys.stderr,
+                    )
             except Exception as e:
                 print(f"  iter {i+1}/{args.iterations} FAILED: {e}", file=sys.stderr)
 
