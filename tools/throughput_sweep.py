@@ -11,14 +11,46 @@ Timing methodology:
   - Time-to-first-token (TTFT) is the wall-clock from request send to the first chunk
     containing non-empty text. This is treated as the prefill window.
   - Token counts come from the final chunk's `usage` block (requires
-    `stream_options.include_usage=true`, which vLLM supports natively; llama.cpp-server
-    compatibility should be validated before trusting results from that backend).
+    `stream_options.include_usage=true`, which vLLM and llama.cpp-server both support).
   - Decode rate is (completion_tokens - 1) / (wall_time - ttft): the first generated
     token is produced at TTFT, so only the remaining tokens belong to the decode window.
 
 Backend-agnostic by construction: the same request/response path is used for both
 backends. The `--backend` flag is recorded in results metadata for provenance, not to
 switch code paths.
+
+Prefix cache avoidance:
+  Each request's prompt is prepended with a short random nonce so that no two requests
+  share a token prefix. This is necessary for backends with automatic cross-request
+  prefix caching (vLLM enables it by default) — without it, repeated iterations of the
+  same prompt are served from the prefix cache and measure KV lookup speed instead of
+  prefill compute. The nonce adds only a handful of tokens, negligible at the prompt
+  sizes this script is designed to measure.
+
+  Defense in depth: if the server reports `usage.prompt_tokens_details.cached_tokens`
+  on the final chunk (both vLLM and llama.cpp do), a non-trivial value on a measured
+  iteration means the nonce strategy is failing and the result is invalid. The script
+  captures this field into each iteration record and prints a live warning when it
+  exceeds a small threshold. The threshold (max of 5 tokens or 5% of prompt) tolerates
+  the BOS token, which is cached across requests on both backends independent of any
+  nonce strategy — the first token is always shared between prompts, so cached_tokens=1
+  on every request is expected and not a signal.
+
+Server-side timings cross-check:
+  llama.cpp-server emits a top-level `timings` block on the final SSE chunk with
+  server-computed prefill and decode rates (prompt_ms, prompt_per_second, predicted_ms,
+  predicted_per_second). When present, this is captured into the iteration record as
+  `server_timings` and serves as an independent ground-truth cross-check against the
+  script's own wall-clock measurements. vLLM does not emit this block; the field is
+  omitted in that case.
+
+Prompt size calibration:
+  At startup, the script sends two small throwaway requests to the server to measure
+  (a) the character-to-token ratio for its filler text under the target model's
+  tokenizer, and (b) the token overhead of the nonce prefix. These measured values
+  are then used to construct prompts that hit the requested token count accurately,
+  rather than relying on a fixed heuristic that systematically misses on many
+  tokenizers. The calibration constants are recorded in results metadata.
 """
 
 import argparse
@@ -38,7 +70,7 @@ import requests
 
 
 BACKENDS = ("llamacpp", "vllm-openai")
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def get_git_info() -> dict:
@@ -78,17 +110,76 @@ def discover_model_name(endpoint: str, timeout: float = 5.0) -> Optional[str]:
         return None
 
 
-def build_prompt(approx_tokens: int) -> str:
+def calibrate_prompt_parameters(
+    endpoint: str,
+    model_name: str,
+    request_timeout: float,
+) -> tuple:
     """
-    Build a prompt of approximately the requested token count.
+    Measure two calibration constants for the target model's tokenizer by issuing
+    small throwaway completion requests:
 
-    Uses a simple repeating filler. The actual token count is captured from the
-    server response in each result record — we care about the server's reported
-    prompt_tokens, not what we tried to send.
+      - chars_per_filler_token: how many characters of the filler text ("lorem ")
+        correspond to one token under this tokenizer.
+      - nonce_tokens: how many tokens a nonce prefix (12 hex chars) consumes. A
+        specific sample nonce is used; subsequent nonces should tokenize to roughly
+        the same count, within a token or two of variance.
+
+    Returns (chars_per_filler_token, nonce_tokens). Raises RuntimeError on failure.
     """
+    url = endpoint.rstrip("/") + "/v1/completions"
+
+    def count_tokens(text: str) -> int:
+        payload = {
+            "model": model_name,
+            "prompt": text,
+            "max_tokens": 1,
+            "temperature": 0.0,
+            "stream": False,
+        }
+        try:
+            resp = requests.post(url, json=payload, timeout=request_timeout)
+            resp.raise_for_status()
+            return resp.json()["usage"]["prompt_tokens"]
+        except (requests.RequestException, KeyError, ValueError) as e:
+            raise RuntimeError(f"Calibration request failed: {e}") from e
+
+    filler_sample = ("lorem " * 500).strip()
+    filler_tokens = count_tokens(filler_sample)
+    if filler_tokens <= 0:
+        raise RuntimeError("Calibration returned zero filler tokens.")
+    chars_per_filler_token = len(filler_sample) / filler_tokens
+
+    sample_nonce = uuid.uuid4().hex[:12]
+    nonce_tokens = count_tokens(sample_nonce)
+
+    return chars_per_filler_token, nonce_tokens
+
+
+def build_prompt(
+    target_tokens: int,
+    chars_per_filler_token: float,
+    nonce_tokens: int,
+) -> str:
+    """
+    Build a prompt of approximately target_tokens tokens, with a unique nonce
+    prefix to defeat cross-request prefix caching.
+
+    Uses measured calibration constants (see calibrate_prompt_parameters) to size
+    the filler accurately for the target model's tokenizer. The actual token count
+    for each request is captured from the server response in the result record —
+    build_prompt is best-effort, and final analysis should group by actual tokens,
+    not requested tokens.
+    """
+    filler_tokens_needed = max(target_tokens - nonce_tokens, 1)
+    filler_chars_needed = max(int(filler_tokens_needed * chars_per_filler_token), 1)
+
     word = "lorem "
-    words_needed = max(1, int(approx_tokens / 0.75))
-    return (word * words_needed).strip()
+    words_needed = max(1, (filler_chars_needed + len(word) - 1) // len(word))
+    filler = (word * words_needed).strip()
+
+    nonce = uuid.uuid4().hex[:12]
+    return f"{nonce} {filler}"
 
 
 def run_streaming_request(
@@ -102,6 +193,13 @@ def run_streaming_request(
     Issue a streaming completion request and return per-request timing + token counts.
 
     Raises RuntimeError if the response stream does not include a usage block.
+
+    Optional fields captured when the server emits them:
+      - cached_tokens: from usage.prompt_tokens_details.cached_tokens. Non-zero on a
+        measured (post-warmup) iteration indicates the nonce strategy is failing.
+      - server_timings: llama.cpp-server's top-level `timings` block, used as an
+        independent cross-check against the script's wall-clock measurements. vLLM
+        does not emit this block.
     """
     url = endpoint.rstrip("/") + "/v1/completions"
     payload = {
@@ -116,6 +214,7 @@ def run_streaming_request(
     t_start = time.perf_counter()
     t_first_token = None
     usage = None
+    server_timings = None
 
     with requests.post(url, json=payload, stream=True, timeout=timeout) as resp:
         resp.raise_for_status()
@@ -133,6 +232,8 @@ def run_streaming_request(
 
             if chunk.get("usage"):
                 usage = chunk["usage"]
+            if chunk.get("timings"):
+                server_timings = chunk["timings"]
 
             choices = chunk.get("choices") or []
             if choices and t_first_token is None:
@@ -150,6 +251,11 @@ def run_streaming_request(
 
     prompt_tokens = usage["prompt_tokens"]
     completion_tokens = usage["completion_tokens"]
+    cached_tokens = (
+        usage.get("prompt_tokens_details", {}).get("cached_tokens")
+        if isinstance(usage.get("prompt_tokens_details"), dict)
+        else None
+    )
 
     wall_time = t_end - t_start
     if t_first_token is None:
@@ -165,9 +271,10 @@ def run_streaming_request(
     # Subtract 1: the first decoded token is produced at TTFT, not during decode.
     decode_rate = max(completion_tokens - 1, 0) / decode_time
 
-    return {
+    record = {
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
+        "cached_tokens": cached_tokens,
         "wall_time_s": wall_time,
         "ttft_s": ttft,
         "prefill_time_s": prefill_time,
@@ -175,6 +282,9 @@ def run_streaming_request(
         "prefill_rate_tok_s": prefill_rate,
         "decode_rate_tok_s": decode_rate,
     }
+    if server_timings is not None:
+        record["server_timings"] = server_timings
+    return record
 
 
 def summarize(records: list) -> dict:
@@ -290,6 +400,22 @@ def main():
         output_path = Path(args.results_dir) / filename
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Calibrate tokenizer behavior for this model
+    print(f"[info] calibrating tokenizer via {args.endpoint}/v1/completions",
+          file=sys.stderr)
+    try:
+        chars_per_filler_token, nonce_tokens = calibrate_prompt_parameters(
+            args.endpoint, model_name, args.request_timeout,
+        )
+    except RuntimeError as e:
+        print(f"[error] {e}", file=sys.stderr)
+        sys.exit(3)
+    print(
+        f"[info] chars_per_filler_token={chars_per_filler_token:.4f} "
+        f"nonce_tokens={nonce_tokens}",
+        file=sys.stderr,
+    )
+
     # Run header
     print(f"throughput_sweep: backend={args.backend} model={model_name}", file=sys.stderr)
     print(f"  endpoint={args.endpoint}", file=sys.stderr)
@@ -302,12 +428,13 @@ def main():
     results = []
     for size in args.prompt_sizes:
         print(f"[prompt_size={size}]", file=sys.stderr)
-        prompt = build_prompt(size)
 
         for i in range(args.warmup):
             try:
                 run_streaming_request(
-                    args.endpoint, model_name, prompt, args.max_tokens, args.request_timeout,
+                    args.endpoint, model_name,
+                    build_prompt(size, chars_per_filler_token, nonce_tokens),
+                    args.max_tokens, args.request_timeout,
                 )
                 print(f"  warmup {i+1}/{args.warmup} ok", file=sys.stderr)
             except Exception as e:
@@ -317,17 +444,45 @@ def main():
         for i in range(args.iterations):
             try:
                 rec = run_streaming_request(
-                    args.endpoint, model_name, prompt, args.max_tokens, args.request_timeout,
+                    args.endpoint, model_name,
+                    build_prompt(size, chars_per_filler_token, nonce_tokens),
+                    args.max_tokens, args.request_timeout,
                 )
                 iters.append(rec)
+
+                # Live cross-check: server-reported rates, if available
+                server_note = ""
+                if rec.get("server_timings"):
+                    st = rec["server_timings"]
+                    sp = st.get("prompt_per_second")
+                    sd = st.get("predicted_per_second")
+                    if sp is not None and sd is not None:
+                        server_note = (
+                            f" | server prefill={sp:.1f} decode={sd:.1f}"
+                        )
+
                 print(
                     f"  iter {i+1}/{args.iterations}: "
                     f"prompt={rec['prompt_tokens']}tok "
                     f"gen={rec['completion_tokens']}tok "
                     f"prefill={rec['prefill_rate_tok_s']:.1f}tok/s "
-                    f"decode={rec['decode_rate_tok_s']:.1f}tok/s",
+                    f"decode={rec['decode_rate_tok_s']:.1f}tok/s"
+                    f"{server_note}",
                     file=sys.stderr,
                 )
+
+                # Live warning: cached_tokens exceeding a small threshold on a
+                # measured iteration means the nonce strategy is failing. The BOS
+                # token is always cached across requests on both backends, so
+                # cached_tokens=1 is expected on every iteration after the first
+                # and is not a signal. Threshold catches meaningful cache hits.
+                cached = rec.get("cached_tokens")
+                if cached is not None and cached > max(5, int(0.05 * rec["prompt_tokens"])):
+                    print(
+                        f"  [warn] cached_tokens={cached} on measured "
+                        f"iter {i+1} — prefix cache is hitting, result is invalid.",
+                        file=sys.stderr,
+                    )
             except Exception as e:
                 print(f"  iter {i+1}/{args.iterations} FAILED: {e}", file=sys.stderr)
 
@@ -358,6 +513,10 @@ def main():
         "model": {
             "name": model_name,
             "source": model_source,
+            "tokenizer_calibration": {
+                "chars_per_filler_token": chars_per_filler_token,
+                "nonce_tokens": nonce_tokens,
+            },
         },
         "sweep_config": {
             "prompt_sizes_requested": args.prompt_sizes,
@@ -365,6 +524,7 @@ def main():
             "iterations": args.iterations,
             "warmup": args.warmup,
             "request_timeout_s": args.request_timeout,
+            "prompt_generation": "nonce_prefixed",
         },
     }
 
