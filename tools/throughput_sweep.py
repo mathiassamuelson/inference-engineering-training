@@ -28,10 +28,13 @@ Prefix cache avoidance:
   sizes this script is designed to measure.
 
   Defense in depth: if the server reports `usage.prompt_tokens_details.cached_tokens`
-  on the final chunk (both vLLM and llama.cpp do), a non-zero value on a measured
+  on the final chunk (both vLLM and llama.cpp do), a non-trivial value on a measured
   iteration means the nonce strategy is failing and the result is invalid. The script
   captures this field into each iteration record and prints a live warning when it
-  occurs.
+  exceeds a small threshold. The threshold (max of 5 tokens or 5% of prompt) tolerates
+  the BOS token, which is cached across requests on both backends independent of any
+  nonce strategy — the first token is always shared between prompts, so cached_tokens=1
+  on every request is expected and not a signal.
 
 Server-side timings cross-check:
   llama.cpp-server emits a top-level `timings` block on the final SSE chunk with
@@ -468,11 +471,15 @@ def main():
                     file=sys.stderr,
                 )
 
-                # Live warning: cached_tokens > 0 on a measured iteration means
-                # the nonce strategy is failing.
-                if rec.get("cached_tokens"):
+                # Live warning: cached_tokens exceeding a small threshold on a
+                # measured iteration means the nonce strategy is failing. The BOS
+                # token is always cached across requests on both backends, so
+                # cached_tokens=1 is expected on every iteration after the first
+                # and is not a signal. Threshold catches meaningful cache hits.
+                cached = rec.get("cached_tokens")
+                if cached is not None and cached > max(5, int(0.05 * rec["prompt_tokens"])):
                     print(
-                        f"  [warn] cached_tokens={rec['cached_tokens']} on measured "
+                        f"  [warn] cached_tokens={cached} on measured "
                         f"iter {i+1} — prefix cache is hitting, result is invalid.",
                         file=sys.stderr,
                     )
