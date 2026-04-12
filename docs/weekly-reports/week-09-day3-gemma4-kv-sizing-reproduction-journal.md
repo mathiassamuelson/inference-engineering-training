@@ -61,18 +61,38 @@ Posted a comment covering: environment pinning, 26B MoE architectural params (hi
 
 Comment archived at `results/issue-39133-comment-26b-moe-reproduction.md` for reference; live version at https://github.com/vllm-project/vllm/issues/39133#issuecomment-4232552320.
 
-## Carried forward to Day 4
+## Week 9 close-out
 
-The "bound the bloat question" stopping criterion from the Day 3 plan is satisfied: the KV-sizing gap is real, quantified, reported upstream, and has a concrete quantitative explanation even if no fix is imminent. Day 4 concurrent benchmarking proceeds against the current vLLM config with explicit framing:
+Week 9 reaches a natural stopping point at Day 3 rather than continuing through the originally planned Day 4 concurrent benchmarking and Day 5 full report.
 
-- vLLM is allocating KV as if all 30 layers are (num_kv_heads=8, head_dim=256, separate K/V) sized at max_model_len
-- Per-GPU KV pool capacity is ~95K tokens at `--gpu-memory-utilization 0.90`, regardless of `--max-model-len`
-- This constrains the concurrency ceiling: at 15K-token sequences (roughly the upper end of statmon-ai's operating range), effective per-GPU concurrent capacity is ~6 requests assuming full-length sequences and no block sharing
-- llama.cpp is using the full architectural KV budget (~22 KB/token measured Day 2) and so has a fundamentally different concurrent-capacity profile
+The Day 2 single-request findings — layer splitting pulling ahead of TP=2 at long context for both prefill and decode — are suspect in light of #39133. vLLM's oversized per-layer KV allocation plausibly penalizes TP configurations more than layer-splitting configurations: TP pays the cost in per-step bandwidth through the attention kernel and all-reduce, while layer splitting pays it in VRAM only. The crossovers observed at ~8K (decode) and ~32K (prefill) may be artifacts of the bug rather than true architectural properties of this hardware. Publishing that conclusion now would either age badly or require caveats heavy enough to undermine the writeup. Running Day 4 concurrent benchmarking against the same vLLM build has the same problem at larger scale — the numbers would be real, but the interpretation would be provisional.
 
-Concurrent benchmarking will measure what the two frameworks actually deliver rather than what an ideal vLLM would; the honest framing is "vLLM-as-shipped vs llama.cpp" not "vLLM vs llama.cpp."
+Week 9 therefore closes with the Day 2 single-request data and the #39133 contribution as its concrete outputs. The TP-vs-layer-splitting investigation is **paused, not abandoned**. When #39133 resolves, the existing benchmark scripts (`tools/throughput_sweep.py` at schema v2) and methodology are ready to re-run against the fixed vLLM; the before-and-after comparison becomes a finding in its own right, arguably more interesting than the original plan because it concretely demonstrates how a single framework bug can invert architectural conclusions. That re-test is a natural LinkedIn Pulse candidate if the result is publishable.
 
-No vLLM config adjustment was discovered that mitigates the issue. The `--kv-cache-dtype fp8_e5m2` workaround mentioned in #39133 hits a compressed-tensors gate and is unavailable for INT4 checkpoints; `fp8_e4m3` hits a Triton SM 8.6 limitation on Ampere. Staying at BF16 KV is the only viable option on this hardware.
+Staying on Gemma 4 for Week 10 preserves the context needed for that eventual re-test — model weights, benchmark scripts, methodology, and mental familiarity all carry forward without a context-switch tax.
+
+## Week 10 pivot
+
+Week 10 shifts focus from runtime-layer optimization to production-deployment concerns: Triton Inference Server with the vLLM backend, fronted by nginx, with statmon-ai as the driving client application.
+
+Rationale:
+
+- **vLLM backend is chosen for known-working Gemma 4 compatibility.** #39133 affects capacity, not correctness; the bug is transparent to the production-deployment work Week 10 tackles.
+- **Production concerns are a legitimate and under-covered side of AI infrastructure.** The original curriculum leaned heavily toward runtime optimization; this broadens scope into TLS termination, reverse-proxy config, observability, API keys, and per-token metering. These are foundational for any real deployment.
+- **statmon-ai as a real client application forces questions synthetic benchmarks can't answer.** The interface contract between statmon-ai and the inference service will be OpenAI-compatible, allowing both sides (the Triton stack and the statmon-ai refactor) to develop independently.
+- **Sticking with Gemma 4 avoids the mental tax** of introducing a new model family mid-program, and keeps the Week 9 re-test accessible when #39133 resolves.
+
+Week 10 scope: **observability first** (Prometheus + Grafana against Triton's built-in metrics and nginx access logs), then **HTTPS termination and reverse-proxy config via nginx**. API keys and per-token billing/metering move to Week 11.
+
+The original Week 10 plan (Triton + TRT-LLM framework comparison) is preserved and pushed forward — same treatment as the Week 8 Gemma 4 insertion gave to the original Triton content.
+
+Operational note for Week 10: default nginx `proxy_buffering on` is incompatible with streaming responses from OpenAI-compatible chat completions. Observability should make buffering misconfigurations visible early — first-token latency approaching full-response latency is the signature.
+
+## #39133 status as Week 9 closes
+
+- Reported upstream with two-architecture reproduction (31B dense via ormandj, 26B MoE via our contribution)
+- No assignee or linked PR as of 2026-04-12; watch item rather than blocker
+- No vLLM config adjustment discovered that mitigates the issue. The `--kv-cache-dtype fp8_e5m2` workaround mentioned in #39133 hits a compressed-tensors gate and is unavailable for INT4 checkpoints; `fp8_e4m3` hits a Triton SM 8.6 limitation on Ampere. BF16 KV is the only viable option on this hardware until upstream fix lands.
 
 ## Methodology notes
 
