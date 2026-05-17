@@ -1,0 +1,24 @@
+=== max-model-len=262144 ===
+container: 8119bd918f5747c1371e498d41561b59101238b4e1b3d6ba21f0a9c1b3b165f6
+(Worker_TP0 pid=96) INFO 05-17 17:27:25 [gpu_worker.py:462] Available KV cache memory: 10.17 GiB
+(EngineCore pid=65) INFO 05-17 17:27:25 [kv_cache_utils.py:1710] GPU KV cache size: 891,535 tokens
+(EngineCore pid=65) INFO 05-17 17:27:25 [kv_cache_utils.py:1711] Maximum concurrency for 262,144 tokens per request: 3.40x
+
+=== max-model-len=131072 ===
+container: 4b692886fabee3d0e55400a5c5dc241bb892b36fb805036a887cdaab1f88f674
+(Worker_TP0 pid=96) INFO 05-17 17:29:41 [gpu_worker.py:462] Available KV cache memory: 10.17 GiB
+(EngineCore pid=65) INFO 05-17 17:29:41 [kv_cache_utils.py:1710] GPU KV cache size: 766,222 tokens
+(EngineCore pid=65) INFO 05-17 17:29:41 [kv_cache_utils.py:1711] Maximum concurrency for 131,072 tokens per request: 5.85x
+
+=== max-model-len=32768 ===
+container: bbc03a7d3a4cb8a91df3952367a0be247d42528159b25f988e7baa6692288708
+(Worker_TP0 pid=96) INFO 05-17 17:31:56 [gpu_worker.py:462] Available KV cache memory: 10.17 GiB
+(EngineCore pid=65) INFO 05-17 17:31:56 [kv_cache_utils.py:1710] GPU KV cache size: 415,501 tokens
+(EngineCore pid=65) INFO 05-17 17:31:56 [kv_cache_utils.py:1711] Maximum concurrency for 32,768 tokens per request: 12.68x
+
+=== max-model-len=8192 ===
+container: 7a6250578e1366aab7dec2e941bb5f02f4df1c76208eb5a66817a10dcc164ff8
+(Worker_TP0 pid=96) INFO 05-17 17:34:11 [gpu_worker.py:462] Available KV cache memory: 10.17 GiB
+(EngineCore pid=65) INFO 05-17 17:34:11 [kv_cache_utils.py:1710] GPU KV cache size: 146,668 tokens
+(EngineCore pid=65) INFO 05-17 17:34:11 [kv_cache_utils.py:1711] Maximum concurrency for 8,192 tokens per request: 17.90x
+
