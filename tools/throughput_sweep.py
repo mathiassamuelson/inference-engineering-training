@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-throughput_sweep.py — single-request throughput sweep for OpenAI-compatible LLM endpoints.
+throughput_sweep.py — throughput sweep for OpenAI-compatible LLM endpoints.
 
 Supports vLLM (native OpenAI-compatible) and llama.cpp-server (OpenAI-compatible mode).
 Uses streaming completions to measure per-request prefill and decode rates, and emits a
-self-describing JSON results file.
+self-describing JSON results file. As of schema v3 the script can issue N requests
+concurrently per measured wave and report system-level aggregate throughput under load.
 
-Timing methodology:
+Timing methodology (per request):
   - Wall clock is captured around the HTTP request.
   - Time-to-first-token (TTFT) is the wall-clock from request send to the first chunk
     containing non-empty text. This is treated as the prefill window.
@@ -14,6 +15,33 @@ Timing methodology:
     `stream_options.include_usage=true`, which vLLM and llama.cpp-server both support).
   - Decode rate is (completion_tokens - 1) / (wall_time - ttft): the first generated
     token is produced at TTFT, so only the remaining tokens belong to the decode window.
+
+Concurrency model (schema v3):
+  A "wave" is N requests dispatched simultaneously via asyncio + httpx.AsyncClient and
+  gathered. `--concurrency N` sets the wave width; `--iterations` sets how many measured
+  waves are run per prompt size (and `--warmup` how many discarded waves precede them).
+  At --concurrency 1 a wave is a single request, so `iterations` waves of width 1 reduce
+  exactly to the v2 single-request-per-iteration behavior.
+
+  Per-request records are always preserved. The concurrent aggregate is computed from
+  the individual records, never measured separately:
+    aggregate_gen_throughput = sum(completion_tokens over a wave's OK requests)
+                             / (max completion_time - min dispatch_time over those requests)
+  i.e. total generated tokens divided by wall-clock from the wave's first dispatch to its
+  last completion. This denominator includes prefill time and is therefore a system
+  throughput figure, distinct from the per-request decode_rate (which excludes prefill).
+
+  dispatch_time and completion_time on each record are seconds relative to that wave's
+  dispatch epoch (a shared monotonic reference taken just before the wave is gathered),
+  so they are directly comparable within a wave and the wave wall-clock is well defined.
+
+  Client-side caveat under concurrency: when N coroutines share one event loop, the
+  instant the client *observes* a request's first token can be delayed by the loop
+  servicing its siblings. At N=1 this is negligible. At N>1, per-request TTFT therefore
+  reflects genuine server-side contention PLUS a small client-side observation artifact;
+  it should be read as "observed TTFT under load," not isolated prefill latency. The
+  aggregate throughput figure is unaffected by this, as it is derived from token counts
+  and wave wall-clock, not from individual TTFTs.
 
 Backend-agnostic by construction: the same request/response path is used for both
 backends. The `--backend` flag is recorded in results metadata for provenance, not to
@@ -51,9 +79,41 @@ Prompt size calibration:
   are then used to construct prompts that hit the requested token count accurately,
   rather than relying on a fixed heuristic that systematically misses on many
   tokenizers. The calibration constants are recorded in results metadata.
+
+Output schema v3:
+  {
+    "metadata": { schema_version: 3, script, run, backend, endpoint, model,
+                  sweep_config: { ..., concurrency } },
+    "results": [
+      {
+        "prompt_size_requested": int,
+        "concurrency": int,
+        "waves": [
+          {
+            "wave_index": int,
+            "requests": [ <per-request record>, ... ],   # supersedes v2 "iterations"
+            "aggregate": { wall_time_s, gen_tokens, prompt_tokens,
+                           gen_throughput_tok_s, n_ok, n_failed }
+          }, ...
+        ],
+        "summary": {
+          "per_request": { wall_time_s, ttft_s, prefill_rate_tok_s, decode_rate_tok_s },
+          "aggregate":   { wall_time_s, gen_tokens, gen_throughput_tok_s }
+        }
+      }, ...
+    ]
+  }
+
+  Per-request record fields are a superset of v2's iteration records: all v2 fields
+  (prompt_tokens, completion_tokens, cached_tokens, wall_time_s, ttft_s, prefill_time_s,
+  decode_time_s, prefill_rate_tok_s, decode_rate_tok_s, and server_timings when present)
+  plus v3 additions request_id, dispatch_time, completion_time. The v2 per-prompt-size
+  "summary" stats live under summary.per_request. Everything a v2 file carried is present;
+  the structure is reorganized around waves, which is why schema_version is bumped to 3.
 """
 
 import argparse
+import asyncio
 import json
 import platform
 import socket
@@ -66,11 +126,11 @@ from pathlib import Path
 from statistics import mean, median, stdev
 from typing import Optional
 
-import requests
+import httpx
 
 
 BACKENDS = ("llamacpp", "vllm-openai")
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def get_git_info() -> dict:
@@ -99,14 +159,15 @@ def discover_model_name(endpoint: str, timeout: float = 5.0) -> Optional[str]:
     """Query /v1/models and return the first model id, or None on failure."""
     url = endpoint.rstrip("/") + "/v1/models"
     try:
-        resp = requests.get(url, timeout=timeout)
-        resp.raise_for_status()
-        data = resp.json()
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
         models = data.get("data", [])
         if not models:
             return None
         return models[0].get("id")
-    except (requests.RequestException, ValueError):
+    except (httpx.HTTPError, ValueError):
         return None
 
 
@@ -138,10 +199,11 @@ def calibrate_prompt_parameters(
             "stream": False,
         }
         try:
-            resp = requests.post(url, json=payload, timeout=request_timeout)
-            resp.raise_for_status()
-            return resp.json()["usage"]["prompt_tokens"]
-        except (requests.RequestException, KeyError, ValueError) as e:
+            with httpx.Client(timeout=request_timeout) as client:
+                resp = client.post(url, json=payload)
+                resp.raise_for_status()
+                return resp.json()["usage"]["prompt_tokens"]
+        except (httpx.HTTPError, KeyError, ValueError) as e:
             raise RuntimeError(f"Calibration request failed: {e}") from e
 
     filler_sample = ("lorem " * 500).strip()
@@ -182,17 +244,25 @@ def build_prompt(
     return f"{nonce} {filler}"
 
 
-def run_streaming_request(
+async def run_streaming_request(
+    client: httpx.AsyncClient,
     endpoint: str,
     model_name: str,
     prompt: str,
     max_tokens: int,
     timeout: float,
+    request_id: str,
+    wave_epoch: float,
 ) -> dict:
     """
-    Issue a streaming completion request and return per-request timing + token counts.
+    Issue one streaming completion request and return a per-request timing + token record.
 
-    Raises RuntimeError if the response stream does not include a usage block.
+    Raises RuntimeError if the response stream does not include a usage block, or if the
+    server returns an error status.
+
+    dispatch_time and completion_time in the returned record are seconds relative to
+    wave_epoch (the shared monotonic reference for the wave this request belongs to), so
+    that aggregate wall-clock can be computed across the wave's requests.
 
     Optional fields captured when the server emits them:
       - cached_tokens: from usage.prompt_tokens_details.cached_tokens. Non-zero on a
@@ -216,9 +286,11 @@ def run_streaming_request(
     usage = None
     server_timings = None
 
-    with requests.post(url, json=payload, stream=True, timeout=timeout) as resp:
-        resp.raise_for_status()
-        for line in resp.iter_lines(decode_unicode=True):
+    async with client.stream("POST", url, json=payload, timeout=timeout) as resp:
+        if resp.status_code >= 400:
+            body = await resp.aread()
+            raise RuntimeError(f"HTTP {resp.status_code}: {body[:500]!r}")
+        async for line in resp.aiter_lines():
             if not line:
                 continue
             if line.startswith("data: "):
@@ -272,6 +344,9 @@ def run_streaming_request(
     decode_rate = max(completion_tokens - 1, 0) / decode_time
 
     record = {
+        "request_id": request_id,
+        "dispatch_time": t_start - wave_epoch,
+        "completion_time": t_end - wave_epoch,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "cached_tokens": cached_tokens,
@@ -287,17 +362,86 @@ def run_streaming_request(
     return record
 
 
-def summarize(records: list) -> dict:
-    """Compute summary statistics across iterations for the key timing fields."""
+async def run_wave(
+    client: httpx.AsyncClient,
+    endpoint: str,
+    model_name: str,
+    size: int,
+    concurrency: int,
+    max_tokens: int,
+    timeout: float,
+    chars_per_filler_token: float,
+    nonce_tokens: int,
+    wave_label: str,
+) -> tuple:
+    """
+    Dispatch `concurrency` streaming requests simultaneously and gather them.
+
+    Returns (ok_records, failures), where failures is a list of error strings. A shared
+    wave_epoch is captured immediately before gather so per-request dispatch_time /
+    completion_time are mutually comparable.
+    """
+    prompts = [
+        build_prompt(size, chars_per_filler_token, nonce_tokens)
+        for _ in range(concurrency)
+    ]
+    wave_epoch = time.perf_counter()
+    tasks = [
+        run_streaming_request(
+            client, endpoint, model_name, prompts[j], max_tokens, timeout,
+            request_id=f"{wave_label}-r{j}", wave_epoch=wave_epoch,
+        )
+        for j in range(concurrency)
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    ok_records, failures = [], []
+    for res in results:
+        if isinstance(res, Exception):
+            failures.append(f"{type(res).__name__}: {res}")
+        else:
+            ok_records.append(res)
+    return ok_records, failures
+
+
+def aggregate_wave(ok_records: list, n_failed: int) -> Optional[dict]:
+    """
+    System-level aggregate for a single wave: total generated tokens over OK requests
+    divided by wall-clock from the wave's first dispatch to its last completion.
+
+    Returns None if the wave had no successful requests.
+    """
+    if not ok_records:
+        return None
+    first_dispatch = min(r["dispatch_time"] for r in ok_records)
+    last_completion = max(r["completion_time"] for r in ok_records)
+    wall = max(last_completion - first_dispatch, 1e-9)
+    gen_tokens = sum(r["completion_tokens"] for r in ok_records)
+    prompt_tokens = sum(r["prompt_tokens"] for r in ok_records)
+    return {
+        "wall_time_s": wall,
+        "gen_tokens": gen_tokens,
+        "prompt_tokens": prompt_tokens,
+        "gen_throughput_tok_s": gen_tokens / wall,
+        "n_ok": len(ok_records),
+        "n_failed": n_failed,
+    }
+
+
+def _stat_block(values: list) -> dict:
+    return {
+        "mean": mean(values),
+        "median": median(values),
+        "min": min(values),
+        "max": max(values),
+        "stdev": stdev(values) if len(values) > 1 else 0.0,
+    }
+
+
+def summarize_per_request(records: list) -> dict:
+    """Summary statistics across all per-request records for a prompt size."""
     def stat(key):
-        values = [r[key] for r in records]
-        return {
-            "mean": mean(values),
-            "median": median(values),
-            "min": min(values),
-            "max": max(values),
-            "stdev": stdev(values) if len(values) > 1 else 0.0,
-        }
+        return _stat_block([r[key] for r in records])
     return {
         "wall_time_s": stat("wall_time_s"),
         "ttft_s": stat("ttft_s"),
@@ -306,9 +450,139 @@ def summarize(records: list) -> dict:
     }
 
 
+def summarize_aggregates(wave_aggs: list) -> dict:
+    """Summary statistics across per-wave aggregate figures for a prompt size."""
+    def stat(key):
+        return _stat_block([w[key] for w in wave_aggs])
+    return {
+        "wall_time_s": stat("wall_time_s"),
+        "gen_tokens": stat("gen_tokens"),
+        "gen_throughput_tok_s": stat("gen_throughput_tok_s"),
+    }
+
+
+async def run_sweep(
+    endpoint: str,
+    model_name: str,
+    prompt_sizes: list,
+    concurrency: int,
+    max_tokens: int,
+    iterations: int,
+    warmup: int,
+    request_timeout: float,
+    chars_per_filler_token: float,
+    nonce_tokens: int,
+) -> list:
+    """Run warmup + measured waves for each prompt size and assemble the results list."""
+    results = []
+    limits = httpx.Limits(max_connections=None, max_keepalive_connections=None)
+    async with httpx.AsyncClient(limits=limits) as client:
+        for size in prompt_sizes:
+            print(f"[prompt_size={size}]", file=sys.stderr)
+
+            for i in range(warmup):
+                ok, fail = await run_wave(
+                    client, endpoint, model_name, size, concurrency,
+                    max_tokens, request_timeout,
+                    chars_per_filler_token, nonce_tokens,
+                    wave_label=f"s{size}-warm{i+1}",
+                )
+                status = f"{len(ok)} ok" + (f", {len(fail)} FAILED" if fail else "")
+                print(f"  warmup wave {i+1}/{warmup}: {status}", file=sys.stderr)
+                for f in fail:
+                    print(f"    [warmup fail] {f}", file=sys.stderr)
+
+            waves = []
+            all_ok_records = []
+            wave_aggs = []
+            for w in range(iterations):
+                ok, fail = await run_wave(
+                    client, endpoint, model_name, size, concurrency,
+                    max_tokens, request_timeout,
+                    chars_per_filler_token, nonce_tokens,
+                    wave_label=f"s{size}-w{w+1}",
+                )
+                agg = aggregate_wave(ok, len(fail))
+                waves.append({
+                    "wave_index": w,
+                    "requests": ok,
+                    "aggregate": agg,
+                })
+                all_ok_records.extend(ok)
+                if agg is not None:
+                    wave_aggs.append(agg)
+
+                # Live console output.
+                if concurrency == 1 and ok:
+                    rec = ok[0]
+                    server_note = ""
+                    if rec.get("server_timings"):
+                        st = rec["server_timings"]
+                        sp = st.get("prompt_per_second")
+                        sd = st.get("predicted_per_second")
+                        if sp is not None and sd is not None:
+                            server_note = f" | server prefill={sp:.1f} decode={sd:.1f}"
+                    print(
+                        f"  iter {w+1}/{iterations}: "
+                        f"prompt={rec['prompt_tokens']}tok "
+                        f"gen={rec['completion_tokens']}tok "
+                        f"prefill={rec['prefill_rate_tok_s']:.1f}tok/s "
+                        f"decode={rec['decode_rate_tok_s']:.1f}tok/s"
+                        f"{server_note}",
+                        file=sys.stderr,
+                    )
+                elif ok:
+                    decodes = [r["decode_rate_tok_s"] for r in ok]
+                    print(
+                        f"  wave {w+1}/{iterations}: "
+                        f"{len(ok)}/{concurrency} ok "
+                        f"agg_gen={agg['gen_throughput_tok_s']:.1f}tok/s "
+                        f"wall={agg['wall_time_s']:.2f}s "
+                        f"| per-req decode {min(decodes):.1f}-{max(decodes):.1f}tok/s",
+                        file=sys.stderr,
+                    )
+                else:
+                    print(
+                        f"  wave {w+1}/{iterations}: 0/{concurrency} ok — all failed",
+                        file=sys.stderr,
+                    )
+                for f in fail:
+                    print(f"    [fail] {f}", file=sys.stderr)
+
+                # Live warning: cached_tokens exceeding a small threshold on a measured
+                # request means the nonce strategy is failing. The BOS token is always
+                # cached across requests on both backends, so cached_tokens=1 is expected
+                # and not a signal. Threshold catches meaningful cache hits.
+                for rec in ok:
+                    cached = rec.get("cached_tokens")
+                    if cached is not None and cached > max(5, int(0.05 * rec["prompt_tokens"])):
+                        print(
+                            f"    [warn] cached_tokens={cached} on {rec['request_id']} "
+                            f"— prefix cache is hitting, result is invalid.",
+                            file=sys.stderr,
+                        )
+
+            entry = {
+                "prompt_size_requested": size,
+                "concurrency": concurrency,
+                "waves": waves,
+            }
+            summary = {}
+            if all_ok_records:
+                summary["per_request"] = summarize_per_request(all_ok_records)
+            if wave_aggs:
+                summary["aggregate"] = summarize_aggregates(wave_aggs)
+            if summary:
+                entry["summary"] = summary
+            results.append(entry)
+
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Single-request throughput sweep for OpenAI-compatible LLM endpoints.",
+        description="Throughput sweep for OpenAI-compatible LLM endpoints "
+                    "(single-request or concurrent).",
     )
     parser.add_argument(
         "--backend",
@@ -335,6 +609,13 @@ def main():
              "Actual counts come from the server.",
     )
     parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=1,
+        help="Requests dispatched simultaneously per wave (default: %(default)s). "
+             "At 1, behavior reduces to single-request-per-iteration (v2 semantics).",
+    )
+    parser.add_argument(
         "--max-tokens",
         type=int,
         default=256,
@@ -344,13 +625,13 @@ def main():
         "--iterations",
         type=int,
         default=3,
-        help="Measured iterations per prompt size (default: %(default)s).",
+        help="Measured waves per prompt size (default: %(default)s).",
     )
     parser.add_argument(
         "--warmup",
         type=int,
         default=1,
-        help="Warmup iterations per prompt size, discarded (default: %(default)s).",
+        help="Warmup waves per prompt size, discarded (default: %(default)s).",
     )
     parser.add_argument(
         "--request-timeout",
@@ -362,7 +643,7 @@ def main():
         "--output",
         default=None,
         help="Output JSON file. Default: "
-             "<results-dir>/throughput_sweep_<backend>_<model>_<timestamp>.json",
+             "<results-dir>/throughput_sweep_<backend>_<model>_c<N>_<timestamp>.json",
     )
     parser.add_argument(
         "--results-dir",
@@ -370,6 +651,10 @@ def main():
         help="Directory for default output filename (default: %(default)s).",
     )
     args = parser.parse_args()
+
+    if args.concurrency < 1:
+        print("[error] --concurrency must be >= 1.", file=sys.stderr)
+        sys.exit(2)
 
     # Resolve model name (explicit or discovered)
     model_source = "explicit"
@@ -390,13 +675,16 @@ def main():
         model_source = "discovered"
         print(f"[info] discovered model: {model_name}", file=sys.stderr)
 
-    # Resolve output path
+    # Resolve output path (model name and concurrency level both in the default filename
+    # so runs against different models or concurrency levels never silently overwrite).
     if args.output:
         output_path = Path(args.output)
     else:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         slug = slugify_model_name(model_name)
-        filename = f"throughput_sweep_{args.backend}_{slug}_{timestamp}.json"
+        filename = (
+            f"throughput_sweep_{args.backend}_{slug}_c{args.concurrency}_{timestamp}.json"
+        )
         output_path = Path(args.results_dir) / filename
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -420,79 +708,24 @@ def main():
     print(f"throughput_sweep: backend={args.backend} model={model_name}", file=sys.stderr)
     print(f"  endpoint={args.endpoint}", file=sys.stderr)
     print(f"  prompt_sizes={args.prompt_sizes}  max_tokens={args.max_tokens}", file=sys.stderr)
-    print(f"  iterations={args.iterations}  warmup={args.warmup}", file=sys.stderr)
+    print(f"  concurrency={args.concurrency}  iterations={args.iterations}  "
+          f"warmup={args.warmup}", file=sys.stderr)
     print(f"  output={output_path}", file=sys.stderr)
     print("", file=sys.stderr)
 
     # Sweep
-    results = []
-    for size in args.prompt_sizes:
-        print(f"[prompt_size={size}]", file=sys.stderr)
-
-        for i in range(args.warmup):
-            try:
-                run_streaming_request(
-                    args.endpoint, model_name,
-                    build_prompt(size, chars_per_filler_token, nonce_tokens),
-                    args.max_tokens, args.request_timeout,
-                )
-                print(f"  warmup {i+1}/{args.warmup} ok", file=sys.stderr)
-            except Exception as e:
-                print(f"  warmup {i+1}/{args.warmup} FAILED: {e}", file=sys.stderr)
-
-        iters = []
-        for i in range(args.iterations):
-            try:
-                rec = run_streaming_request(
-                    args.endpoint, model_name,
-                    build_prompt(size, chars_per_filler_token, nonce_tokens),
-                    args.max_tokens, args.request_timeout,
-                )
-                iters.append(rec)
-
-                # Live cross-check: server-reported rates, if available
-                server_note = ""
-                if rec.get("server_timings"):
-                    st = rec["server_timings"]
-                    sp = st.get("prompt_per_second")
-                    sd = st.get("predicted_per_second")
-                    if sp is not None and sd is not None:
-                        server_note = (
-                            f" | server prefill={sp:.1f} decode={sd:.1f}"
-                        )
-
-                print(
-                    f"  iter {i+1}/{args.iterations}: "
-                    f"prompt={rec['prompt_tokens']}tok "
-                    f"gen={rec['completion_tokens']}tok "
-                    f"prefill={rec['prefill_rate_tok_s']:.1f}tok/s "
-                    f"decode={rec['decode_rate_tok_s']:.1f}tok/s"
-                    f"{server_note}",
-                    file=sys.stderr,
-                )
-
-                # Live warning: cached_tokens exceeding a small threshold on a
-                # measured iteration means the nonce strategy is failing. The BOS
-                # token is always cached across requests on both backends, so
-                # cached_tokens=1 is expected on every iteration after the first
-                # and is not a signal. Threshold catches meaningful cache hits.
-                cached = rec.get("cached_tokens")
-                if cached is not None and cached > max(5, int(0.05 * rec["prompt_tokens"])):
-                    print(
-                        f"  [warn] cached_tokens={cached} on measured "
-                        f"iter {i+1} — prefix cache is hitting, result is invalid.",
-                        file=sys.stderr,
-                    )
-            except Exception as e:
-                print(f"  iter {i+1}/{args.iterations} FAILED: {e}", file=sys.stderr)
-
-        entry = {
-            "prompt_size_requested": size,
-            "iterations": iters,
-        }
-        if iters:
-            entry["summary"] = summarize(iters)
-        results.append(entry)
+    results = asyncio.run(run_sweep(
+        endpoint=args.endpoint,
+        model_name=model_name,
+        prompt_sizes=args.prompt_sizes,
+        concurrency=args.concurrency,
+        max_tokens=args.max_tokens,
+        iterations=args.iterations,
+        warmup=args.warmup,
+        request_timeout=args.request_timeout,
+        chars_per_filler_token=chars_per_filler_token,
+        nonce_tokens=nonce_tokens,
+    ))
 
     # Metadata (no model-specific hardcoded fields)
     metadata = {
@@ -520,6 +753,7 @@ def main():
         },
         "sweep_config": {
             "prompt_sizes_requested": args.prompt_sizes,
+            "concurrency": args.concurrency,
             "max_tokens": args.max_tokens,
             "iterations": args.iterations,
             "warmup": args.warmup,
