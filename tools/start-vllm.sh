@@ -18,6 +18,11 @@
 #     force fp8 KV here.
 #   - Marlin FP8 weight emulation works fine on SM 8.6.
 #
+# Deployment note: this is a TEXT-ONLY deployment. --limit-mm-per-prompt zeroes image,
+# audio, AND video so vLLM does not reserve an encoder cache budget for modalities we
+# never use; that budget is reclaimed into the KV pool. Held constant across all
+# TP-vs-PP runs.
+#
 set -euo pipefail
 
 # ---- Defaults (override via flags) ------------------------------------------------
@@ -84,6 +89,7 @@ echo "  gpu-mem-util  : ${GPU_MEM_UTIL}"
 echo "  image         : ${IMAGE}"
 echo "  container     : ${NAME}"
 echo "  port          : ${PORT}"
+echo "  modalities    : text-only (image/audio/video limited to 0)"
 [[ ${#EXTRA_ARGS[@]} -gt 0 ]] && echo "  extra vllm    : ${EXTRA_ARGS[*]}"
 echo "====================="
 
@@ -102,6 +108,6 @@ exec docker run --rm -it \
   --max-num-batched-tokens 4096 \
   --gpu-memory-utilization "${GPU_MEM_UTIL}" \
   --kv-cache-dtype auto \
-  --limit-mm-per-prompt '{"image":0,"audio":0}' \
+  --limit-mm-per-prompt '{"image":0,"audio":0,"video":0}' \
   --host 0.0.0.0 --port "${PORT}" \
   "${EXTRA_ARGS[@]}"
