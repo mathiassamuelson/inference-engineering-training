@@ -591,6 +591,15 @@ def main():
         help="Backend serving the endpoint. Recorded in results metadata for provenance.",
     )
     parser.add_argument(
+        "--placement",
+        default="na",
+        choices=("naive", "steered", "na"),
+        help="Stage->GPU placement provenance for pipeline-parallel runs (default: %(default)s). "
+             "Recorded in metadata and folded into the default filename; does NOT switch code "
+             "paths and is NOT verified by this script (confirm actual placement via nvidia-smi "
+             "uuid-join). Use 'na' for configs where stage ordering is not a variable (e.g. TP).",
+    )
+    parser.add_argument(
         "--endpoint",
         default="http://localhost:8000",
         help="Base URL of the OpenAI-compatible server (default: %(default)s).",
@@ -643,7 +652,8 @@ def main():
         "--output",
         default=None,
         help="Output JSON file. Default: "
-             "<results-dir>/throughput_sweep_<backend>_<model>_c<N>_<timestamp>.json",
+             "<results-dir>/throughput_sweep_<backend>_<model>_c<N>[_<placement>]_<timestamp>.json "
+             "(placement segment included only when not 'na').",
     )
     parser.add_argument(
         "--results-dir",
@@ -682,8 +692,10 @@ def main():
     else:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         slug = slugify_model_name(model_name)
+        placement_seg = "" if args.placement == "na" else f"_{args.placement}"
         filename = (
-            f"throughput_sweep_{args.backend}_{slug}_c{args.concurrency}_{timestamp}.json"
+            f"throughput_sweep_{args.backend}_{slug}_c{args.concurrency}"
+            f"{placement_seg}_{timestamp}.json"
         )
         output_path = Path(args.results_dir) / filename
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -707,6 +719,8 @@ def main():
     # Run header
     print(f"throughput_sweep: backend={args.backend} model={model_name}", file=sys.stderr)
     print(f"  endpoint={args.endpoint}", file=sys.stderr)
+    print(f"  placement={args.placement} (provenance only — verify via nvidia-smi uuid-join)",
+          file=sys.stderr)
     print(f"  prompt_sizes={args.prompt_sizes}  max_tokens={args.max_tokens}", file=sys.stderr)
     print(f"  concurrency={args.concurrency}  iterations={args.iterations}  "
           f"warmup={args.warmup}", file=sys.stderr)
@@ -754,6 +768,7 @@ def main():
         "sweep_config": {
             "prompt_sizes_requested": args.prompt_sizes,
             "concurrency": args.concurrency,
+            "placement": args.placement,
             "max_tokens": args.max_tokens,
             "iterations": args.iterations,
             "warmup": args.warmup,
