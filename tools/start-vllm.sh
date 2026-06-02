@@ -9,9 +9,22 @@
 # Usage:
 #   ./start-vllm.sh                          # FP8 31B, TP=2, GPUs 0,2 (default)
 #   ./start-vllm.sh --mode pp --size 2       # PP=2 on the NVLink pair
-#   ./start-vllm.sh --mode pp --size 4 --gpus all   # PP=4 stretch across all GPUs
+#   ./start-vllm.sh --mode pp --size 4 --gpus all   # PP=4 stretch, naive placement (stage i -> GPU i)
+#   ./start-vllm.sh --mode pp --size 4 --device-order 0,2,1,3   # PP=4, STEERED: NVLink pair adjacent
 #   ./start-vllm.sh --model <hf-id> --mode tp --size 2 --max-model-len 65536
 #   ./start-vllm.sh ... -- --enforce-eager   # anything after `--` is passed to vLLM verbatim
+#
+# Deterministic stage->GPU placement (--device-order):
+#   Docker's `--gpus` device-list ORDER does NOT reliably control in-container CUDA
+#   enumeration; with identical GPUs, CUDA's default FASTEST_FIRST resolves ties by
+#   bus order, so vLLM lands stage i on physical GPU i regardless of the list. To steer
+#   placement deterministically we expose ALL GPUs to the container (`--gpus all`) and
+#   then select+order them INSIDE the container with CUDA_VISIBLE_DEVICES, pinning the
+#   index basis with CUDA_DEVICE_ORDER=PCI_BUS_ID so the order matches `nvidia-smi`.
+#   vLLM assigns PP rank i -> cuda:i, so `--device-order 0,2,1,3` puts physical GPUs
+#   0 and 2 (the NVLink pair) on adjacent stages PP0 & PP1 -> the PP0->PP1 boundary
+#   becomes the NVLink hop. Confirm where stages actually landed via nvidia-smi
+#   uuid-join; never trust the intent line.
 #
 # Ampere notes (RTX 3090, SM 8.6):
 #   - FP8 KV cache requires SM 8.9+, so --kv-cache-dtype auto resolves to BF16. Do not
@@ -30,6 +43,7 @@ MODEL="RedHatAI/gemma-4-31B-it-FP8-block"
 MODE="tp"                 # tp | pp
 SIZE="2"                  # parallel degree
 GPUS="0,2"                # comma list of device ids, or the literal "all"
+DEVICE_ORDER=""           # optional in-container CUDA_VISIBLE_DEVICES order for deterministic PP stage placement
 MAX_MODEL_LEN="131072"    # PROVISIONAL — final value set after Day 2 KV characterization
 GPU_MEM_UTIL="0.90"
 PORT="8000"
@@ -45,6 +59,7 @@ while [[ $# -gt 0 ]]; do
     --mode)           MODE="$2"; shift 2 ;;
     --size)           SIZE="$2"; shift 2 ;;
     --gpus)           GPUS="$2"; shift 2 ;;
+    --device-order)   DEVICE_ORDER="$2"; shift 2 ;;
     --max-model-len)  MAX_MODEL_LEN="$2"; shift 2 ;;
     --gpu-mem-util)   GPU_MEM_UTIL="$2"; shift 2 ;;
     --port)           PORT="$2"; shift 2 ;;
@@ -62,10 +77,21 @@ case "$MODE" in
   *)  echo "[error] --mode must be 'tp' or 'pp' (got '$MODE')" >&2; exit 2 ;;
 esac
 
-# ---- Resolve GPU selector ---------------------------------------------------------
+# ---- Resolve GPU selector + deterministic placement -------------------------------
 # Docker wants the literal quoted form '"device=0,2"' for an explicit id list, or the
 # bare token 'all' to expose every GPU.
-if [[ "$GPUS" == "all" ]]; then
+#
+# When --device-order is set, we force Docker to expose ALL GPUs and do the actual
+# selection+ordering inside the container via CUDA_VISIBLE_DEVICES (+ PCI_BUS_ID), so
+# stage placement is deterministic instead of relying on Docker list order.
+CUDA_ENV_ARGS=()
+if [[ -n "$DEVICE_ORDER" ]]; then
+  if [[ "$GPUS" != "all" && "$GPUS" != "0,2" ]]; then
+    echo "[warn] --device-order overrides --gpus '${GPUS}'; exposing all GPUs and selecting via CUDA_VISIBLE_DEVICES=${DEVICE_ORDER}." >&2
+  fi
+  GPU_ARG="all"
+  CUDA_ENV_ARGS=(-e "CUDA_DEVICE_ORDER=PCI_BUS_ID" -e "CUDA_VISIBLE_DEVICES=${DEVICE_ORDER}")
+elif [[ "$GPUS" == "all" ]]; then
   GPU_ARG="all"
 else
   GPU_ARG="\"device=${GPUS}\""
@@ -84,6 +110,11 @@ echo "=== start-vllm.sh ==="
 echo "  model         : ${MODEL}"
 echo "  parallelism   : ${MODE}=${SIZE}"
 echo "  gpus          : ${GPUS}"
+if [[ -n "$DEVICE_ORDER" ]]; then
+  echo "  device-order  : ${DEVICE_ORDER}  (in-container CUDA_VISIBLE_DEVICES, PCI_BUS_ID; --gpus forced to all)"
+else
+  echo "  device-order  : (none — naive: stage i -> physical GPU i)"
+fi
 echo "  max-model-len : ${MAX_MODEL_LEN}  (provisional until Day 2 characterization)"
 echo "  gpu-mem-util  : ${GPU_MEM_UTIL}"
 echo "  image         : ${IMAGE}"
@@ -100,6 +131,7 @@ exec docker run --rm -it \
   --gpus "${GPU_ARG}" \
   --ipc=host --shm-size "${SHM_SIZE}" --network host \
   -e HF_TOKEN="${HF_TOKEN:-}" \
+  "${CUDA_ENV_ARGS[@]}" \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   "${IMAGE}" \
   --model "${MODEL}" \
