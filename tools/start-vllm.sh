@@ -12,6 +12,7 @@
 #   ./start-vllm.sh --mode pp --size 4 --gpus all   # PP=4 stretch, naive placement (stage i -> GPU i)
 #   ./start-vllm.sh --mode pp --size 4 --device-order 0,2,1,3   # PP=4, STEERED: NVLink pair adjacent
 #   ./start-vllm.sh --model <hf-id> --mode tp --size 2 --max-model-len 65536
+#   ./start-vllm.sh --mode tp --size 2 --profiler-cudagraphs off   # recover CUDA-graph KV tax
 #   ./start-vllm.sh ... -- --enforce-eager   # anything after `--` is passed to vLLM verbatim
 #
 # Deterministic stage->GPU placement (--device-order):
@@ -25,6 +26,16 @@
 #   0 and 2 (the NVLink pair) on adjacent stages PP0 & PP1 -> the PP0->PP1 boundary
 #   becomes the NVLink hop. Confirm where stages actually landed via nvidia-smi
 #   uuid-join; never trust the intent line.
+#
+# CUDA-graph KV tax (--profiler-cudagraphs):
+#   Since vLLM v0.21.0, CUDA-graph memory profiling reserves capture memory BEFORE the
+#   KV pool, so a nominal --gpu-memory-utilization is effectively lower for KV purposes
+#   (boot log reports the equivalent). This is the default ("on") and is the held-constant
+#   condition for the Week 11 Days 1-5 baseline; leave it at the default to reproduce
+#   those runs. Setting "off" injects VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0, which
+#   disables the estimate and returns the reserved memory to the KV pool (recovers the
+#   tax). This CHANGES held-constant: only use "off" as a deliberate, named variable in a
+#   tax-recovery boot, never as a silent default. One variable per boot.
 #
 # Ampere notes (RTX 3090, SM 8.6):
 #   - FP8 KV cache requires SM 8.9+, so --kv-cache-dtype auto resolves to BF16. Do not
@@ -46,6 +57,7 @@ GPUS="0,2"                # comma list of device ids, or the literal "all"
 DEVICE_ORDER=""           # optional in-container CUDA_VISIBLE_DEVICES order for deterministic PP stage placement
 MAX_MODEL_LEN="131072"    # PROVISIONAL — final value set after Day 2 KV characterization
 GPU_MEM_UTIL="0.90"
+PROFILER_CUDAGRAPHS="on"  # on (default, baseline) | off (recover CUDA-graph KV tax)
 PORT="8000"
 IMAGE="vllm/vllm-openai:v0.21.0"
 NAME=""                   # container name; default derived below from mode/size
@@ -55,17 +67,18 @@ SHM_SIZE="16G"
 EXTRA_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --model)          MODEL="$2"; shift 2 ;;
-    --mode)           MODE="$2"; shift 2 ;;
-    --size)           SIZE="$2"; shift 2 ;;
-    --gpus)           GPUS="$2"; shift 2 ;;
-    --device-order)   DEVICE_ORDER="$2"; shift 2 ;;
-    --max-model-len)  MAX_MODEL_LEN="$2"; shift 2 ;;
-    --gpu-mem-util)   GPU_MEM_UTIL="$2"; shift 2 ;;
-    --port)           PORT="$2"; shift 2 ;;
-    --image)          IMAGE="$2"; shift 2 ;;
-    --name)           NAME="$2"; shift 2 ;;
-    --)               shift; EXTRA_ARGS=("$@"); break ;;
+    --model)              MODEL="$2"; shift 2 ;;
+    --mode)               MODE="$2"; shift 2 ;;
+    --size)               SIZE="$2"; shift 2 ;;
+    --gpus)               GPUS="$2"; shift 2 ;;
+    --device-order)       DEVICE_ORDER="$2"; shift 2 ;;
+    --max-model-len)      MAX_MODEL_LEN="$2"; shift 2 ;;
+    --gpu-mem-util)       GPU_MEM_UTIL="$2"; shift 2 ;;
+    --profiler-cudagraphs) PROFILER_CUDAGRAPHS="$2"; shift 2 ;;
+    --port)               PORT="$2"; shift 2 ;;
+    --image)              IMAGE="$2"; shift 2 ;;
+    --name)               NAME="$2"; shift 2 ;;
+    --)                   shift; EXTRA_ARGS=("$@"); break ;;
     *) echo "[error] unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -75,6 +88,16 @@ case "$MODE" in
   tp) PARALLEL_FLAG=(--tensor-parallel-size "$SIZE") ;;
   pp) PARALLEL_FLAG=(--pipeline-parallel-size "$SIZE") ;;
   *)  echo "[error] --mode must be 'tp' or 'pp' (got '$MODE')" >&2; exit 2 ;;
+esac
+
+# ---- Resolve CUDA-graph profiler (KV tax) -----------------------------------------
+# "on"  -> default vLLM behavior (estimate enabled); the Days 1-5 baseline.
+# "off" -> inject VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0 to recover the tax.
+PROFILER_ENV_ARGS=()
+case "$PROFILER_CUDAGRAPHS" in
+  on)  : ;;  # leave vLLM default; no env injected
+  off) PROFILER_ENV_ARGS=(-e "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0") ;;
+  *)   echo "[error] --profiler-cudagraphs must be 'on' or 'off' (got '$PROFILER_CUDAGRAPHS')" >&2; exit 2 ;;
 esac
 
 # ---- Resolve GPU selector + deterministic placement -------------------------------
@@ -117,6 +140,11 @@ else
 fi
 echo "  max-model-len : ${MAX_MODEL_LEN}  (provisional until Day 2 characterization)"
 echo "  gpu-mem-util  : ${GPU_MEM_UTIL}"
+if [[ "$PROFILER_CUDAGRAPHS" == "off" ]]; then
+  echo "  cudagraph prof: OFF  (VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0 — KV tax recovered; NON-baseline)"
+else
+  echo "  cudagraph prof: on   (vLLM default; Days 1-5 baseline)"
+fi
 echo "  image         : ${IMAGE}"
 echo "  container     : ${NAME}"
 echo "  port          : ${PORT}"
@@ -132,6 +160,7 @@ exec docker run --rm -it \
   --ipc=host --shm-size "${SHM_SIZE}" --network host \
   -e HF_TOKEN="${HF_TOKEN:-}" \
   "${CUDA_ENV_ARGS[@]}" \
+  "${PROFILER_ENV_ARGS[@]}" \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   "${IMAGE}" \
   --model "${MODEL}" \
