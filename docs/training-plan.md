@@ -1,6 +1,6 @@
 # Training Plan: NVIDIA Inference Stack Mastery (Revised)
 
-*Last updated: May 17, 2026 — reflects actual progress through Week 9 + the vLLM 0.21.0 HMA re-test session*
+*Last updated: June 9, 2026 — reflects completion of Week 11 (TP-vs-PP + max-MML characterization) and a Phase 3 revision: Weeks 12–13 repurposed from quantization methods to sub-agent-tier validation and the delegation architecture; quality-degradation measurement folded into Week 23. Week 12 path updated to the `vllm/vllm-openai:gemma4-unified` launch image (PR #44429) for the encoder-free 12B Unified model.*
 
 ---
 
@@ -119,11 +119,24 @@
 
 ## Phase 3: Optimization & Quantization (Weeks 11-15)
 
-*Goal: Master parallelism strategies, model compression, and optimization techniques. Phase 3 starts at Week 11 and runs 5 weeks (one more than the original 4) to accommodate the parallelism-strategy comparison that anchors Week 11.*
+*Goal: Master parallelism strategies, then validate and operationalize the tiered delegation architecture that emerged from the Week 11 parallelism work. Phase 3 starts at Week 11 and runs 5 weeks. Weeks 12–13 were repurposed from the original quantization-methods content (rendered largely redundant by the Gemma deployment work in Weeks 8/9/11) to sub-agent-tier validation and concurrent two-tier serving; the surviving quality-degradation measurement moved to Week 23.*
 
-### Week 11: Parallelism Strategy Comparison — TP vs PP on Gemma 4 31B Dense FP8
+### Week 11: Parallelism Strategy Comparison — TP vs PP on Gemma 4 31B Dense FP8 ✅
 
 *The closing chapter of the parallelism-strategy thread that runs Week 3 (multi-GPU topology) → Week 7 (NVLink TP) → Week 8 Day 2 (NVLink PP characterization) → Week 9 Day 2 (paused mid-comparison due to #39133). With the HMA fix landed in vLLM 0.21.0, that thread can now close cleanly with controlled, single-framework data.*
+
+**Outcome (6 days):** the parallelism question closed, and a max-context-length characterization (Day 6) surfaced the finding that reframed the project's direction.
+
+- **KV cost model (Day 2):** TP=2 per-seq KV/GPU ≈ 1.97 GiB + 39.2 KiB/token × seq_len, validated to ~1% and used to predict every later ceiling. Text-only deployment drops the vision tower entirely (15.85 vs 16.93 GiB/GPU), raising available KV to 4.04 GiB/GPU.
+- **PP=2 non-viable (Day 3):** the 256K-vocab embedding/LM-head don't shard under PP — they land whole on the end stages, starving KV. Serviceable context ~12× smaller than TP=2.
+- **PP=4 viable but doesn't win where it counts (Days 4–5):** ~3.9× TP=2's KV pool, but ~1.7× slower decode (structural to pipelining over the host bridge, not steerable). Prefill crosses above TP=2 between 8K–16K. At c=4, TP=2 won aggregate throughput and fan-out completion at every prompt size — the "bigger pool → more throughput" thesis was refuted; capacity and throughput are distinct ceilings.
+- **Max-MML ceilings (Day 6):** TP=2 is KV-bound at 54,496 tokens (util 0.95) / 66,848 (util 0.97, CUDA-graph tax recovered, +22.7%, crossing the 64K tier); PP=4 is *architecture*-bound at the full 256K with KV to spare. But PP=4 serves 256K at ~15 tok/s with ~5-minute TTFT.
+- **The reframe:** for an interactive use case, fit is not the bar — usability is. PP=4's 256K is architecturally reachable but not interactively usable. **Neither single config serves the use case well** (TP=2 interactive but context-limited; PP=4 long-context but not interactive), which is the evidence that motivates the delegation architecture now anchoring Weeks 12–13.
+- **Tooling:** `tools/throughput_sweep.py` (schema v3, concurrency-aware); `tools/start-vllm.sh` gained `--device-order` (Day 4) and `--profiler-cudagraphs {on,off}` (Day 6).
+- **Publication:** held. The architectural finding (tiered delegation) is the strong, portable claim but is a hypothesis until the sub-agent tier is validated (Week 12). The TP-vs-PP data lacks generality without the use-case context; the CUDA-graph tax mis-advice is an upstream issue, not a post.
+- **Models tested:** Gemma 4 31B Dense FP8 on vLLM (TP=2, PP=2, PP=4).
+
+*Original forward-looking plan for the week, preserved for reference:*
 
 - **Configuration:** Gemma 4 31B Dense, FP8 weights (`RedHatAI/gemma-4-31B-it-FP8-block`), vLLM 0.21.0, BF16 KV cache (Ampere FP8-KV is SM 8.9+, doesn't apply here)
 - **Comparisons:**
@@ -139,19 +152,33 @@
 - **Deliverable:** TP vs PP report with single-request and concurrent throughput, per-GPU KV capacity, communication-pattern analysis, PCIe topology cost characterization. LinkedIn Pulse candidate on the TP-vs-PP framing for the NVLink-pair-only audience (PP=4 is data-for-self, not for publication)
 - **Models tested:** Gemma 4 31B Dense FP8 on vLLM (TP=2, PP=2, PP=4)
 
-### Week 12: Quantization Methods (AWQ, GPTQ) — Quality Measurement
+### Week 12: Sub-agent tier validation & the delegation architecture
 
-- Apply AWQ and GPTQ quantization to Llama 3.2 3B and a 7-14B model
-- Measure quality degradation: perplexity, generation coherence, task accuracy
-- Benchmark INT4/INT8 vs FP16: throughput, latency, memory savings
-- **Note:** Week 8 Day 4's AWQ-INT4 deployment of Gemma 4 26B A4B already established that AWQ via `compressed-tensors` works cleanly on Ampere and provides substantial memory savings. Week 9's HMA characterization quantified KV-side savings on AWQ-INT4 deployment. Week 11's FP8 work adds 8-bit float datapoints. Week 12 focuses on the systematic *quality* measurement that those weeks deferred
-- **Deliverable:** Quality vs performance tradeoff analysis across quantization methods
+*Repurposed from the original "Quantization Methods (AWQ, GPTQ)" block. Rationale: the Gemma work already established quantization as a working baseline — AWQ-on-Ampere (Week 8), KV-side savings under HMA (Week 9), FP8 datapoints (Week 11) — so the deployment-performance side of the original quantization weeks is redundant. The general operating principle is to run the highest-fidelity model that gives an acceptable context window, not to compare one quantization against another. The systematic quality-degradation measurement (the one part of the old Week 12 still wanted) moves to Week 23. This week instead validates the cheap tier of the delegation architecture that emerged from Week 11.*
 
-### Week 13: Quantized Model Serving with vLLM
+*The architecture, stated substrate-neutrally: a capable model orchestrates and reasons over distilled findings; cheap, fast specialists do the bulk context work; the tiers are decoupled from the deployment substrate, so the same design runs on frontier APIs or self-hosted weights depending on a customer's cost and privacy constraints. The self-hosted realization here (31B orchestrator + 12B sub-agents on consumer GPUs) is the proof case, not the thesis.*
 
-- Serve quantized models through vLLM: measure end-to-end production impact
-- Capacity planning with quantization: how many more concurrent users per GPU?
-- **Deliverable:** Quantization deployment guide with measured quality/performance tradeoffs
+- **The load-bearing open question:** `google/gemma-4-12B-it-qat-w4a16-ct` was downloaded in Week 11 but failed to load on pinned vLLM 0.21.0 (`gemma4_unified` architecture unsupported). The 12B "Unified" model is encoder-free — it projects raw image/audio directly into the decoder, a genuinely different architecture from the 31B Dense, which is why 0.21.0 rejected it. The single-GPU 12B load test is the first task — the whole delegation architecture depends on the sub-agent tier actually serving.
+- **The blocker is solved via a dedicated launch image, not a stable release** (per the vLLM recipe for `google/gemma-4-12B-it`, updated 2026-06-04). Support for the unified architecture landed in vLLM PR #44429 and has *not* shipped stable; the path is the pinned image `vllm/vllm-openai:gemma4-unified` (CUDA 13; `-cu129` tag for CUDA 12.9 hosts) or a nightly wheel. Same posture as the Week 8 Gemma-4 day-1 work — a launch build, not `pip install -U`. Holds the "upstream images only, no custom Dockerfiles" rule.
+- **First task, do-or-die for the sub-agent tier: does `gemma4-unified` load the *w4a16 QAT* checkpoint on a 24 GB card?** The recipe documents the *BF16* 12B and says it needs a 40 GB+ GPU — which the x1-card 3090s (24 GB) do not have. That's exactly why the QAT was chosen. But the recipe only documents BF16; whether the unified image loads the 4-bit QAT variant is unstated. If yes → sub-agent tier is viable on this hardware. If no → there's a fit problem to solve (alternate quant, or the 12B doesn't fit the sub-agent cards at all), which would reshape the architecture. Test this before anything else.
+- **Two vLLM builds, one per tier — not a single converged version (yet).** The `gemma4-unified` image is nightly-based; the 31B FP8 work is pinned to stable 0.21.0. There is no single release today that carries both the unified path and the 31B Dense FP8 path. So the near-term reality is the orchestrator on 0.21.0 and the sub-agents on `gemma4-unified`. This is fine for the Week 12 *load test* (it needs only the unified image). Single-version convergence — and the clean 31B re-baseline that depends on it — is a Week 13 / later concern for the concurrent deployment, gated on vLLM's release timeline, not a Week 12 blocker. Evaluate 0.22.x / K=V-unification as part of that convergence (it would also lift the ~2× global-layer over-allocation noted in Week 9's epilogue and Week 11 Day 6).
+- **Recovered-util adoption decision:** whether the CUDA-graph-tax-recovered util (0.97, +22.7% usable context on TP=2) becomes the orchestrator's baseline. It changes held-constant, so it's a deliberate choice requiring re-baselining — and the two vLLM-recommended recovery recipes are non-viable on this 24 GiB hardware, so the working path (util 0.97, found by laddering) must be documented as the one that holds. Tied to the convergence step above (the re-baseline is where this gets locked in).
+- **Box layout, now evidence-backed:** orchestrator = 31B TP=2 on the NVLink pair (GPUs 0+2); sub-agents = two independent 12B-QAT workers, one per PCIe-x1 card (GPUs 1 and 3). Two separate single-GPU instances, not tensor-parallel across the x1 link (Week 3/6 established that's non-viable on x1).
+- **Capability bonuses for the delegation pattern** (from the recipe, worth noting for Week 13's orchestrator↔sub-agent wiring, not for the load test): native function calling with a custom tool-use protocol (`--tool-call-parser gemma4`) and structured thinking mode (`--reasoning-parser gemma4`) — tool-calling sub-agents are exactly what a fan-out orchestrator wants. An MTP assistant draft model exists as a later decode-speed lever. Context pins to 128K (`max_position_embeddings 131072`) though the card markets 256K — characterize the real ceiling rather than trusting either number.
+- **Deliverable:** sub-agent tier characterization (12B-QAT single-GPU on `gemma4-unified`: does it load on 24 GB, context ceiling, decode/prefill on an x1 card), the QAT-on-unified-image compatibility finding, and a go/no-go on the delegation architecture. (The 31B re-baseline moves to the convergence step / Week 13.)
+- **Models tested:** Gemma 4 12B-QAT (`google/gemma-4-12B-it-qat-w4a16-ct`) on `vllm/vllm-openai:gemma4-unified`.
+
+### Week 13: The delegation architecture, operational — concurrent two-tier serving
+
+*Repurposed from the original "Quantized Model Serving with vLLM" block. This is the delegation architecture from Week 12 made real: 31B orchestrator and 2×12B sub-agents running concurrently as three independent services on the four-GPU box, fronted by a single endpoint. It also revives the nginx/reverse-proxy work deferred as a side-quest in Week 10 (`inference-reference-stack`) — now load-bearing rather than busywork, because the two-worker sub-agent tier gives the reverse proxy an actual job.*
+
+- **Concurrent three-service deployment:** 31B TP=2 on the NVLink pair plus two single-GPU 12B-QAT workers on GPUs 1 and 3, all live at once. Process/port management, VRAM partitioning across all four cards, and ensuring the three vLLM instances coexist without contention on load.
+- **nginx front door:** two separate 12B models behind one nginx endpoint, reviving the deferred Week 10 stack work. **Open design question:** load-balanced pool (nginx round-robins across the two workers — "give me any free worker") vs. path-addressable workers (the orchestrator targets a specific worker — "worker A handles component X"). The fan-out pattern of the orchestrator decides this; flag it, don't pre-decide.
+- **Cross-tier interference characterization:** the three services share host RAM, the PCIe root complex, and CPU even though they're on separate GPUs. The honest systems question: does the orchestrator's latency stay isolated when the sub-agents are saturated, or do the tiers interfere? This is the measurement that validates the box layout works as a concurrent system, not just as three configs that each boot.
+- **Version convergence + 31B re-baseline (moved here from Week 12):** the concurrent deployment is where the two-build split has to be resolved — ideally onto a single vLLM version carrying both the `gemma4_unified` path and the 31B Dense FP8 path. If no converged version exists yet, the fallback is running the two tiers on two different upstream images side by side (orchestrator on 0.21.0, sub-agents on `gemma4-unified`), which is operationally workable but worth documenting as a known split. When convergence happens, re-run the Week 11 TP=2 measurements as a regression check (Week 11's pinned-0.21.0 numbers are the baseline) and lock in the recovered-util decision.
+- **Observability across both tiers:** extend the Week 10 Prometheus/Grafana stack to cover all three services — per-tier KV usage, latency, throughput — so interference is visible.
+- **Deliverable:** a working two-tier orchestrator/sub-agent deployment with a single endpoint, the routing-approach decision documented, and concurrent-interference measurements. This is the operational proof that completes the delegation-architecture arc started in Week 11 — and, if it holds, the evidence behind the architecture Pulse held since Week 11.
+- **Models tested:** Gemma 4 31B Dense FP8 (orchestrator) + 2× Gemma 4 12B-QAT (sub-agents), concurrent.
 
 ### Week 14: Speculative Decoding & KV Cache Compression
 
@@ -228,11 +255,12 @@
 - Simulate failure scenarios and recovery
 - **Deliverable:** Production monitoring dashboard and reliability playbook
 
-### Week 23: Latency-Quality Tradeoff Framework
+### Week 23: Latency-Quality Tradeoff Framework (incl. quantization quality degradation)
 
 - Document how quantization, batching, caching, and model size affect user experience
-- Create decision framework for model selection (when to use 3B vs 7B vs 14B vs 70B)
-- **Deliverable:** Model selection guide with measured data from this hardware
+- **Quantization quality degradation** (folded in from the original Week 12): systematic measurement of how lower-bit models degrade — perplexity, generation coherence, task accuracy — across AWQ/GPTQ/FP8 at INT4/INT8 vs higher-fidelity baselines. This is the one piece of the original quantization weeks worth keeping: not deployment-performance (already covered by the Gemma work in Weeks 8/9/11), but the *qualitative* fidelity cost of going to fewer bits, which the operating principle ("run the highest fidelity that fits") makes a deliberate, measured tradeoff rather than a default
+- Create decision framework for model selection (when to use 3B vs 7B vs 14B vs 70B, and at what quantization)
+- **Deliverable:** Model selection guide with measured data from this hardware, including a quality-vs-bits curve
 
 ---
 
@@ -280,12 +308,15 @@
 | Phase 3 starts at Week 9 | Phase 3 starts at Week 11 | 2-week shift accommodates the Gemma 4 work in Weeks 8-9 and the inference-stack work in Week 10 |
 | Phase 3 = 4 weeks (originally Weeks 9-12) | Phase 3 = 5 weeks (Weeks 11-15) | One additional week to fit the parallelism-strategy closing chapter alongside the original quantization/profiling content |
 | Week 11-12: Custom CUDA Kernels | Week 14: Speculative decoding + KV cache compression, Week 15: NSight profiling | More production-relevant than writing custom kernels from scratch |
+| Week 12: Quantization Methods (AWQ, GPTQ) — quality measurement | Week 12: Sub-agent tier validation & the delegation architecture | Quantization-as-deployment-baseline already established across Weeks 8/9/11 (AWQ on Ampere, HMA KV savings, FP8); operating principle is highest-fidelity-that-fits, not quant-vs-quant perf. Week 11's max-MML work showed no single config serves the interactive use case, motivating a tiered orchestrator/sub-agent architecture — Week 12 validates the cheap (12B) tier, gated on the `gemma4_unified` vLLM-version investigation |
+| Week 13: Quantized Model Serving with vLLM | Week 13: The delegation architecture, operational — concurrent two-tier serving | Repointed to the concrete system: 31B orchestrator + 2×12B sub-agents running concurrently behind one nginx endpoint. Revives the nginx/reverse-proxy work deferred as a Week 10 side-quest, now load-bearing. The two-tier interference characterization is the operational proof of the architecture |
+| (quantization quality measurement) | Folded into Week 23 (Latency-Quality Tradeoff Framework) | The one part of the original quantization weeks still wanted — qualitative fidelity degradation at lower bit-widths — belongs with the existing latency-quality framework (which already covered quantization's UX effect), removing a redundancy rather than creating a standalone week |
 | Phase 5: Separate PM track | Phase 5: Integrated operations + cost modeling | Cost modeling benefits from having all benchmark data in hand |
 | 24-week program | **27-week program** | The four-day Gemma 4 arc, the Week 9 continuation, and the parallelism-strategy closing chapter in Week 11 extend the timeline by three weeks; later phases preserved at original length rather than compressed |
 
 ---
 
 *Training started: January 13, 2026*
-*Current status: Phase 2 complete (Week 10 partial — side-quest); beginning Week 11*
+*Current status: Phase 2 complete (Week 10 partial — side-quest); Week 11 complete (TP-vs-PP + max-MML); beginning Week 12 (sub-agent tier validation)*
 *Hardware: 4x RTX 3090 (96GB total), Gigabyte B650 Eagle AX, Ubuntu 24.04*
 *NVLink bridge: Installed (AORUS GeForce RTX NVLink, GPU0+GPU2, NV4)*
