@@ -1,0 +1,122 @@
+{
+  "experiment": "week-12 day-2: 12B QAT single-GPU load + context-ceiling walk",
+  "date": "2026-06-11",
+  "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+  "environment": {
+    "host": "inference",
+    "gpu": {
+      "device_index": 1,
+      "uuid": "GPU-a7370cb3-24e2-9656-132e-a5b71fd76398",
+      "name": "RTX 3090",
+      "vram_gib": 23.56,
+      "link": "PCIe 3.0 x1 (irrelevant: single-GPU TP=1, no inter-GPU traffic)"
+    },
+    "image": "vllm/vllm-openai:gemma4-unified",
+    "image_digest": "sha256:e828735fba48bca2cf9701864d41693c91953394c5b1455b4668edd7563ed450",
+    "vllm_version_string": "0.1.dev17235+gf52870f26.d20260603",
+    "host_cuda": "13.0",
+    "driver": "580.126.09",
+    "source_patch": {
+      "file": "patches/gemma4_unified.py",
+      "applied_via": "read-only docker volume mount over /usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/gemma4_unified.py",
+      "description": "3-line verbatim backport of upstream main's prefix-threading fix for the encoder-free vision embedder; without it, patch_dense reports an empty layer name, never matches the checkpoint's compressed-tensors ignore list, and is constructed packed while the checkpoint ships it bf16 (shape mismatch at weight load)",
+      "retire_when": "week-13 version convergence lands on an image containing the upstream fix"
+    },
+    "mandatory_hf_overrides": {
+      "vision_config.num_soft_tokens": "256 (inert placeholder; MM-budget code reads a field absent from checkpoint config)",
+      "quantization_config": "checkpoint's config.json quantization_config restated VERBATIM with regex ignore entries appended; --hf-overrides does a SHALLOW REPLACE, so a partial override silently drops quant_method and the model constructs as ~24 GB bf16 (root cause of the Day 1 OOM)"
+    },
+    "launcher": "tools/start-12b-qat.sh"
+  },
+  "held_constant": {
+    "gpu_memory_utilization": 0.90,
+    "kv_cache_dtype": "auto (bf16)",
+    "limit_mm_per_prompt": {"image": 0, "audio": 0},
+    "cudagraph_memory_profiling": "on (vLLM default since v0.21.0)",
+    "attention_backend": "TRITON_ATTN (forced: heterogeneous head dims, head_dim=256 SWA / global_head_dim=512)",
+    "max_num_batched_tokens": "2496 (image auto-raise for prefix-LM video budget; not overridden)"
+  },
+  "launch_attempts": [
+    {
+      "attempt": 1,
+      "config_delta": "--enforce-eager added to Day 1 config (Day 1 partial quantization_config override still in place)",
+      "outcome": "OOM",
+      "detail": "identical to Day 1: 22.85 GiB allocated by PyTorch, died allocating 1.88 GiB for lm_head during weight construction; engine config line revealed quantization=None",
+      "finding": "eager-fixes-load hypothesis FALSIFIED (compile/capture happen after weight load); real cause exposed: model constructing unquantized bf16 (~24 GB) because the Day 1 hf-override shallow-replaced quantization_config and dropped quant_method"
+    },
+    {
+      "attempt": 2,
+      "config_delta": "full verbatim quantization_config in hf-overrides",
+      "outcome": "weight-load failure (no OOM)",
+      "detail": "MarlinLinearKernel active, checkpoint 9.56 GiB, construction completed; ValueError: checkpoint ships vision_embedder.patch_dense.weight (bf16, on ignore list) but module constructed packed (weight_packed/weight_scale/weight_shape)",
+      "finding": "image's gemma4_unified.py constructs patch_dense without a prefix argument -> empty layer name -> ignore list can never match; genuine vLLM bug, fixed in upstream main"
+    },
+    {
+      "attempt": 3,
+      "config_delta": "3-line upstream prefix backport mounted over image file",
+      "outcome": "clean load and serve",
+      "detail": "weights 8.28 GiB (eager run; < 9.56 GiB on-disk checkpoint, consistent with weight tying)"
+    }
+  ],
+  "baseline_mml_32768": {
+    "eager": {
+      "weights_gib": 8.28,
+      "kv_pool_gib": 11.82,
+      "kv_tokens": 245222,
+      "concurrency_at_mml": 7.48,
+      "decode_toks_per_s_warmed": 69,
+      "decode_note": "floor; probes 167 tok / 2.423 s and 2.422 s (replicated); first probe 4.124 s excluded as Triton-JIT cold-start artifact"
+    },
+    "cudagraphs": {
+      "weights_gib": 8.28,
+      "kv_pool_gib": 11.00,
+      "kv_tokens": 228200,
+      "concurrency_at_mml": 6.96,
+      "cudagraph_memory_gib": {"estimated": 0.79, "actual_capture": 0.68, "overshoot_pct": 17.0},
+      "effective_util_for_kv": 0.8663,
+      "kv_tax_recovery_env": "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0 (NOT used; default-on is held-constant)",
+      "decode_toks_per_s_warmed": 78,
+      "decode_note": "probes 164 tok / 2.095 s and 166 tok / 2.134 s (replicated); first probe 2.974 s excluded as JIT warmup",
+      "prediction_miss": "predicted 90-110 tok/s from launch-overhead removal; actual gap dominated by kernel quality (TRITON_ATTN, Marlin dequant, bf16 lm_head), which graphs do not touch"
+    }
+  },
+  "context_ceiling_walk": {
+    "config": "cudagraphs on, util 0.90, all else held constant; one relaunch per rung",
+    "rungs": [
+      {"max_model_len": 32768,  "kv_pool_gib": 11.00, "kv_tokens": 228200, "concurrency_at_mml": 6.96, "avg_kb_per_token": 51.8},
+      {"max_model_len": 65536,  "kv_pool_gib": 11.00, "kv_tokens": 346672, "concurrency_at_mml": 5.29, "avg_kb_per_token": 34.1},
+      {"max_model_len": 131072, "kv_pool_gib": 10.99, "kv_tokens": 467959, "concurrency_at_mml": 3.57, "avg_kb_per_token": 25.2},
+      {"max_model_len": 262144, "kv_pool_gib": 10.99, "kv_tokens": 567180, "concurrency_at_mml": 2.16, "avg_kb_per_token": 20.8}
+    ],
+    "two_coefficient_fit": {
+      "form": "avg_cost_kb_per_token(L) = g + c / L",
+      "g_global_kb_per_token": 16.4,
+      "c_swa_gib_per_sequence": 1.08,
+      "fitted_on_rungs": [65536, 131072],
+      "held_out_check_32768": {"predicted_kb_per_token": 51.78, "measured": 51.76, "error_pct": 0.04},
+      "forward_check_262144": {"predicted_tokens": "560000-580000", "predicted_concurrency": "2.1-2.2", "measured_tokens": 567180, "measured_concurrency": 2.16},
+      "mechanism": "SWA layers hold KV only for a fixed window per sequence; global layers hold KV for the full sequence; average per-token cost therefore falls with sequence length"
+    },
+    "findings": [
+      "KV pool is MML-insensitive on this build (flat 11.0 GiB across 8x MML range) — contrasts with pool-grows-with-MML on v0.21.0 (Week 11); engine-version-dependent",
+      "model is KV-unconstrained across its entire defined context range on a single 24 GB card: full 262,144 architectural context fits at 2.16x concurrency",
+      "fp8-KV lever and PP=2 fallback both unneeded",
+      "recipe's 131072 pin is NOT a memory constraint on this hardware; likely quality-validation boundary (unverified)"
+    ]
+  },
+  "functional_verification": {
+    "placement": "single process on GPU-a7370cb3 confirmed via nvidia-smi --query-compute-apps uuid-join",
+    "probe_method": "chat completion, ~150-word factual prompt, unique nonce per request (defeats prefix caching), temperature 0, max_tokens 256; first probe per boot discarded as JIT warmup",
+    "probes_mml_262144": [
+      {"nonce": "w12d2-256k-probe-001", "completion_tokens": 164, "wall_s": 2.966, "role": "warmup, discarded"},
+      {"nonce": "w12d2-256k-probe-002", "completion_tokens": 166, "wall_s": 2.104, "toks_per_s": 79}
+    ],
+    "scope_limit": "probes verify the configuration is functional at short context; long-sequence behavior (100K+ prefill, decode at depth, output quality) untested"
+  },
+  "open_items": [
+    "long-context functional/quality testing",
+    "production MML choice for the sub-agent worker (workload/quality decision; memory permits up to 262144)",
+    "parked levers: zero video modality (reclaim 2496-token encoder budget), KV-tax recovery env (~0.79 GiB), fp8 KV cache (verify SM 8.6 support first)",
+    "week-13: version convergence, retire source patch, 31B re-baseline"
+  ]
+}
