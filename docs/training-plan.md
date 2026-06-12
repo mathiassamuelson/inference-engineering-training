@@ -167,6 +167,8 @@
 - **Capability bonuses for the delegation pattern** (from the recipe, worth noting for Week 13's orchestrator↔sub-agent wiring, not for the load test): native function calling with a custom tool-use protocol (`--tool-call-parser gemma4`) and structured thinking mode (`--reasoning-parser gemma4`) — tool-calling sub-agents are exactly what a fan-out orchestrator wants. An MTP assistant draft model exists as a later decode-speed lever. Context pins to 128K (`max_position_embeddings 131072`) though the card markets 256K — characterize the real ceiling rather than trusting either number.
 - **Deliverable:** sub-agent tier characterization (12B-QAT single-GPU on `gemma4-unified`: does it load on 24 GB, context ceiling, decode/prefill on an x1 card), the QAT-on-unified-image compatibility finding, and a go/no-go on the delegation architecture. (The 31B re-baseline moves to the convergence step / Week 13.)
 - **Models tested:** Gemma 4 12B-QAT (`google/gemma-4-12B-it-qat-w4a16-ct`) on `vllm/vllm-openai:gemma4-unified`.
+- **Outcome (Week 12 complete):** Sub-agent tier **validated** — go on the delegation architecture. The QAT 
+  checkpoint loads and serves on a single 24 GB card (8.28 GiB weights; Day 1's OOM was self-inflicted via a shallow-replacing `--hf-overrides`, plus one genuine image bug patched via a 3-line upstream backport — retire at version convergence). No memory ceiling exists on this card: the full 262,144 architectural context fits at 2.16× concurrency. **Production MML: 131,072** — the model's `max_position_embeddings` validation boundary; memory permits 262K but the 131K–262K range is quality-unvalidated (see the Week 12 summary journal for the full rationale and the long-context evaluation open item). Measured: decode 69.6 tok/s @8K / 51.7 @64K / 46.2 @102K; batching pays 2.33× at 8K but the worker is functionally serial at 64K+ — a direct input to Week 13's front-door design (queueing ≈ batching at depth, with better latency). The "characterize the real ceiling rather than trusting either number" instruction above is resolved: the card's 256K is mechanically real, the config's 128K is the validated envelope, and we ship the latter.
 
 ### Week 13: The delegation architecture, operational — concurrent two-tier serving
 
@@ -317,6 +319,6 @@
 ---
 
 *Training started: January 13, 2026*
-*Current status: Phase 2 complete (Week 10 partial — side-quest); Week 11 complete (TP-vs-PP + max-MML); beginning Week 12 (sub-agent tier validation)*
+*Current status: Phase 2 complete (Week 10 partial — side-quest); Week 11 complete (TP-vs-PP + max-MML); Week 12 complete (sub-agent tier validated, 12B QAT shipped at MML 131,072); beginning Week 13 (concurrent two-tier deployment)*
 *Hardware: 4x RTX 3090 (96GB total), Gigabyte B650 Eagle AX, Ubuntu 24.04*
 *NVLink bridge: Installed (AORUS GeForce RTX NVLink, GPU0+GPU2, NV4)*
