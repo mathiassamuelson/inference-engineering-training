@@ -78,7 +78,7 @@ Smooth, no cliffs. **Prediction vs outcome:** predicted 64K prefill at 2,100–2
 
 ## Long-context smoke test at ~104K
 
-A retrieval-flavored coherence probe via the chat endpoint: a unique fact ("the maintenance code is MAKWGOIC-7741") planted at position 0, ~104 K tokens of synthetic log filler, then a question asking for the fact back — the hardest retrieval geometry, since only the global-attention layers can span that distance.
+A retrieval-flavored coherence probe via the chat endpoint: a unique fact ("the maintenance code is MAKWGOIC-7741") planted in the opening sentence of the context (not literally token index 0 — the chat template prepends its own tokens), ~104 K tokens of synthetic log filler, then a question asking for the fact back — maximum-distance retrieval, since only the global-attention layers can span it, though document-start placement is empirically an attention-favored position.
 
 **Pass.** Exact code retrieved, coherent one-sentence answer, no degeneracy. Wall 98.5 s, consistent with the measured prefill rate (104,549 tokens ÷ 1,083 tok/s ≈ 96.5 s). This is a smoke test, not a quality evaluation — the systematic long-context quality work remains a separate effort.
 
