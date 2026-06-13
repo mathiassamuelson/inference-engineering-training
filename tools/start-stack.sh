@@ -199,7 +199,9 @@ wait_healthy() {  # poll the given tiers until all healthy or timeout
     done
     pending=("${still[@]}")
     [[ ${#pending[@]} -eq 0 ]] && break
-    if (( $(awk -v s="$start" -v n="$(now)" 'BEGIN{print (n-s)>'"$PROBE_TIMEOUT"'}') )); then
+    # proper elapsed>timeout test via awk EXIT CODE.
+    # (prior `print (n-s)>TIMEOUT` was awk file-redirection, not a comparison — it never fired.)
+    if awk -v s="$start" -v n="$(now)" -v t="$PROBE_TIMEOUT" 'BEGIN{exit !((n-s)>t)}'; then
       log "ERROR: probe timeout (${PROBE_TIMEOUT}s); still unhealthy: ${pending[*]}"
       return 1
     fi
@@ -330,7 +332,6 @@ rm -f "$TSV"
 # ---- summary table -------------------------------------------------------------------------
 log "=== boot choreography summary ($MODE) ============================================"
 printf '%-14s %-38s %-8s %8s %8s %-7s\n' tier model gpus offset t2h place
-nvidia_busy() { :; }
 python3 - "$JSON_OUT" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))

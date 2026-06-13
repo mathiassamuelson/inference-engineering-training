@@ -154,7 +154,10 @@ echo "====================="
 
 # ---- Launch -----------------------------------------------------------------------
 # Foreground (--rm -it): Ctrl-C stops and removes the container.
-exec docker run --rm -it \
+TTY_FLAGS=(-i)
+[ -t 1 ] && TTY_FLAGS=(-it)      # interactive terminal -> -it (Week 11 behavior, unchanged)
+                                 # non-interactive (orchestrator/nohup/CI) -> -i, no TTY required
+exec docker run "${TTY_FLAGS[@]}" --rm \
   --name "${NAME}" \
   --gpus "${GPU_ARG}" \
   --ipc=host --shm-size "${SHM_SIZE}" --network host \
