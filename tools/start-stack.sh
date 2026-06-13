@@ -267,7 +267,7 @@ DOCKER_STATS_JSON="$(docker stats --no-stream --format '{"name":"{{.Name}}","mem
 # ---- assemble services.tsv -----------------------------------------------------------------
 TSV="$(mktemp)"
 for spec in "${SPECS[@]}"; do
-  IFS='|' read -r tier kind gpus port <<<"$spec"
+  IFS='|' read -r tier kind gpus port name <<<"$spec"
   lt="${LAUNCH_T[$tier]:-}"; ht="${HEALTHY_T[$tier]:-}"
   offset="NA"; t2h="NA"
   [[ -n "$lt" ]] && offset="$(elapsed "$T0" "$lt")"
