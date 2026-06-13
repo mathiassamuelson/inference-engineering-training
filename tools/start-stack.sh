@@ -38,7 +38,9 @@ MODEL_31B="RedHatAI/gemma-4-31B-it-FP8-block"
 MML_12B=131072
 MML_31B=33024
 UTIL_12B=0.90           # start-12b-qat.sh default
-UTIL_31B=0.90           # start-vllm.sh default (override --util-31b 0.95 if the layout uses it)
+UTIL_31B=0.95           # MML 33024 needs 0.95: at 0.90 the v0.21.0 cudagraph-profiling tax
+                        # cuts effective util to ~0.859 -> ~2.86 GiB KV -> ceiling ~23,616 < 33024
+                        # (refuses to boot). Week 11 baseline 33024 was characterized at 0.95.
 PORT_W1=8001
 PORT_W2=8003
 PORT_ORCH=8000
