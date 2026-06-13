@@ -153,7 +153,7 @@ echo "  modalities    : text-only (image/audio/video limited to 0)"
 echo "====================="
 
 # ---- Launch -----------------------------------------------------------------------
-# Foreground (--rm -it): Ctrl-C stops and removes the container.
+# Foreground (--rm): Ctrl-C stops and removes the container.
 TTY_FLAGS=(-i)
 [ -t 1 ] && TTY_FLAGS=(-it)      # interactive terminal -> -it (Week 11 behavior, unchanged)
                                  # non-interactive (orchestrator/nohup/CI) -> -i, no TTY required
