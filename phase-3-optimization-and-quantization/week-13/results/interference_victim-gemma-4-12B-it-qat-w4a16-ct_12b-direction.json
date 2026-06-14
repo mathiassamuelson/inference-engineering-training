@@ -1,0 +1,148 @@
+{
+  "experiment": "cross_tier_interference",
+  "direction": "12b",
+  "timestamp_utc": "2026-06-14T16:27:31Z",
+  "git": {
+    "git_sha": "98ee3e6a97e69b015d84f3630ca0b67a8f178c6d",
+    "dirty": true
+  },
+  "host": "inference",
+  "victim": {
+    "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+    "endpoint": "http://localhost:8001",
+    "gpus": [
+      1
+    ],
+    "probe": "throughput_sweep.py c=1"
+  },
+  "aggressors": [
+    {
+      "url": "http://localhost:8003",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "via_pool": false,
+      "requests_ok": 160,
+      "requests_failed": 0,
+      "errors": {}
+    },
+    {
+      "url": "http://localhost:8000",
+      "model": "RedHatAI/gemma-4-31B-it-FP8-block",
+      "via_pool": false,
+      "requests_ok": 124,
+      "requests_failed": 0,
+      "errors": {}
+    }
+  ],
+  "aggressor_config": {
+    "concurrency_per_target": 16,
+    "prompt_tokens_approx": 512,
+    "max_tokens": 256,
+    "ramp_seconds": 20.0,
+    "load_endpoint": "/v1/chat/completions (nonce-prefixed, APC-defeating)"
+  },
+  "placement": {
+    "victim": {
+      "gpus": [
+        1
+      ],
+      "observed": {
+        "1": {
+          "uuid": "GPU-a7370cb3-24e2-9656-132e-a5b71fd76398",
+          "used_mib": 22162
+        }
+      },
+      "placement_ok": true
+    },
+    "aggressors": [
+      {
+        "gpus": [
+          3
+        ],
+        "observed": {
+          "3": {
+            "uuid": "GPU-0da3bc5b-8e8b-16e7-8eee-5084ea3d2c82",
+            "used_mib": 22162
+          }
+        },
+        "placement_ok": true
+      },
+      {
+        "gpus": [
+          0,
+          2
+        ],
+        "observed": {
+          "0": {
+            "uuid": "GPU-3a7eac76-25ae-edf8-eb11-d6b846ffb56f",
+            "used_mib": 23470
+          },
+          "2": {
+            "uuid": "GPU-8b223d02-aa0f-426b-470e-df5b3873d7ba",
+            "used_mib": 23470
+          }
+        },
+        "placement_ok": true
+      }
+    ]
+  },
+  "saturation_sample": {
+    "0": {
+      "util_pct": "100",
+      "mem_used_mib": "23470"
+    },
+    "1": {
+      "util_pct": "0",
+      "mem_used_mib": "22162"
+    },
+    "2": {
+      "util_pct": "100",
+      "mem_used_mib": "23470"
+    },
+    "3": {
+      "util_pct": "100",
+      "mem_used_mib": "22162"
+    }
+  },
+  "nginx_upstream_distribution": {},
+  "victim_sweep_file": "/home/msamuels/work/rtx3090-ai-training/phase-3-optimization-and-quantization/week-13/results/interference_victim-gemma-4-12B-it-qat-w4a16-ct_12b-direction_victim-sweep.json",
+  "baseline_file": "/home/msamuels/work/rtx3090-ai-training/phase-3-optimization-and-quantization/week-13/results/interference_solo_baseline_victim-gemma-4-12B-it-qat-w4a16-ct.json",
+  "victim_probe_rc": 0,
+  "diff_loaded_vs_solo": [
+    {
+      "prompt_size": 512,
+      "decode_tok_s": {
+        "solo": 79.21349815688049,
+        "loaded": 78.63258104715223,
+        "loaded_over_solo": 0.9927
+      },
+      "prefill_tok_s": {
+        "solo": 2558.566728540736,
+        "loaded": 2655.751105641563,
+        "loaded_over_solo": 1.038
+      },
+      "ttft_s": {
+        "solo": 0.20056920908391476,
+        "loaded": 0.19241906851530075,
+        "loaded_over_solo": 0.9594
+      }
+    },
+    {
+      "prompt_size": 4096,
+      "decode_tok_s": {
+        "solo": 74.49323901173878,
+        "loaded": 74.1412438236495,
+        "loaded_over_solo": 0.9953
+      },
+      "prefill_tok_s": {
+        "solo": 2625.4462489155076,
+        "loaded": 2623.1732736764257,
+        "loaded_over_solo": 0.9991
+      },
+      "ttft_s": {
+        "solo": 1.5572222163900733,
+        "loaded": 1.5579005083069206,
+        "loaded_over_solo": 1.0004
+      }
+    }
+  ]
+}
