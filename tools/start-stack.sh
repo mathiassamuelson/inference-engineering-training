@@ -107,9 +107,16 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 mkdir -p "$RESULTS_DIR"
 
 GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo UNKNOWN)"
-if [[ -n "$(git -C "$ROOT" status --porcelain 2>/dev/null)" ]]; then
-  log "WARNING: working tree is DIRTY — recorded git SHA ($GIT_SHA) will not be clean."
-  log "         Commit before a measured run (commit-before-running discipline)."
+# Dirty-tree check EXCLUDES the results dir: result files are expected to be uncommitted at
+# write time, so a dirty results/ is normal and not a provenance problem. Only changes OUTSIDE
+# results/ (code, tools, configs) mean the recorded SHA won't reflect what actually ran. The
+# exclude is applied only when results/ sits inside the repo; an external --results-dir isn't
+# in the tree anyway, so the plain whole-tree check still applies there.
+DIRTY_PATHSPEC=(.)
+case "$RESULTS_DIR" in "$ROOT"/*) DIRTY_PATHSPEC=(. ":(exclude)${RESULTS_DIR#"$ROOT"/}") ;; esac
+if [[ -n "$(git -C "$ROOT" status --porcelain -- "${DIRTY_PATHSPEC[@]}" 2>/dev/null)" ]]; then
+  log "WARNING: working tree is DIRTY outside results/ — recorded git SHA ($GIT_SHA) will not be clean."
+  log "         Commit code/tool changes before a measured run (commit-before-running discipline)."
 fi
 
 # functional health probe — CHAT endpoint only (raw completions => Gemma-4 gibberish)
