@@ -91,7 +91,8 @@ done
 now()     { date +%s.%N; }
 elapsed() { awk -v a="$1" -v b="$2" 'BEGIN{printf "%.2f", b-a}'; }   # b - a
 slugify() { basename "$1" | tr '/:@' '___' | tr -cs 'A-Za-z0-9._-' '-' | sed 's/-*$//'; }
-ts_utc()  { date -u +%Y-%m-%dT%H:%M:%SZ; }
+ts_utc()  { date -u +%Y-%m-%dT%H:%M:%SZ; }    # ISO 8601 — for JSON metadata fields
+ts_file() { date -u +%Y%m%dT%H%M%SZ; }        # colon-free compact stamp — for default filenames
 log()     { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 
 # Anchor to the SCRIPT's own location, NOT cwd. tools/ is one level under the repo root.
@@ -244,7 +245,10 @@ load_gpu_maps() {
 }
 
 # ---- run -----------------------------------------------------------------------------------
-STEM="boot_choreography_${MODE}_workers-$(slugify "$MODEL_12B")_orch-$(slugify "$MODEL_31B")"
+# Default STEM carries a UTC timestamp so repeated boots of the same model pair never
+# overwrite a prior (possibly committed) result — the Day-3 clobber. An explicit --out
+# bypasses this: if you name the file, you own any overwrite.
+STEM="boot_choreography_${MODE}_workers-$(slugify "$MODEL_12B")_orch-$(slugify "$MODEL_31B")_$(ts_file)"
 [[ -n "$OUT_FILE" ]] && STEM="$(basename "${OUT_FILE%.json}")"
 JSON_OUT="$RESULTS_DIR/${STEM}.json"
 
