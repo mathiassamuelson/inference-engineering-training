@@ -1,0 +1,78 @@
+{
+  "experiment": "boot_choreography",
+  "mode": "staggered",
+  "timestamp_utc": "2026-06-13T23:37:33Z",
+  "git_sha": "5697868d12874c30a45f9e9beadc488dfee43dea",
+  "host": "inference",
+  "probe": {
+    "endpoint": "/v1/chat/completions",
+    "interval_s": 2.0,
+    "timeout_s": 420.0
+  },
+  "host_mem_mb": {
+    "available_at_start": 58542,
+    "available_at_steady": 40103,
+    "swap_used_at_steady": 48
+  },
+  "services": [
+    {
+      "tier": "worker1",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "gpus_requested": "1",
+      "port": 8001,
+      "max_model_len": 131072,
+      "gpu_memory_utilization": 0.9,
+      "launcher": "tools/start-12b-qat.sh",
+      "launch_offset_s": 0.0,
+      "time_to_healthy_s": 145.45,
+      "placement_observed": "1:GPU-a7370cb3-24e2-9656-132e-a5b71fd76398:22162MB",
+      "placement_ok": true,
+      "image_digest": "vllm/vllm-openai@sha256:e828735fba48bca2cf9701864d41693c91953394c5b1455b4668edd7563ed450"
+    },
+    {
+      "tier": "worker2",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "gpus_requested": "3",
+      "port": 8003,
+      "max_model_len": 131072,
+      "gpu_memory_utilization": 0.9,
+      "launcher": "tools/start-12b-qat.sh",
+      "launch_offset_s": 145.45,
+      "time_to_healthy_s": 137.41,
+      "placement_observed": "3:GPU-0da3bc5b-8e8b-16e7-8eee-5084ea3d2c82:22162MB",
+      "placement_ok": true,
+      "image_digest": "vllm/vllm-openai@sha256:e828735fba48bca2cf9701864d41693c91953394c5b1455b4668edd7563ed450"
+    },
+    {
+      "tier": "orchestrator",
+      "model": "RedHatAI/gemma-4-31B-it-FP8-block",
+      "gpus_requested": "0,2",
+      "port": 8000,
+      "max_model_len": 33024,
+      "gpu_memory_utilization": 0.95,
+      "launcher": "tools/start-vllm.sh",
+      "launch_offset_s": 282.86,
+      "time_to_healthy_s": 107.44,
+      "placement_observed": "0:GPU-3a7eac76-25ae-edf8-eb11-d6b846ffb56f:23470MB;2:GPU-8b223d02-aa0f-426b-470e-df5b3873d7ba:23470MB",
+      "placement_ok": true,
+      "image_digest": "UNKNOWN"
+    }
+  ],
+  "steady_state_containers": [
+    {
+      "name": "gemma4-31b-tp2",
+      "mem": "22.43GiB / 60.44GiB",
+      "perc": "37.12%"
+    },
+    {
+      "name": "gemma4-12b-qat-gpu3",
+      "mem": "4.987GiB / 60.44GiB",
+      "perc": "8.25%"
+    },
+    {
+      "name": "gemma4-12b-qat-gpu1",
+      "mem": "5.292GiB / 60.44GiB",
+      "perc": "8.76%"
+    }
+  ]
+}
