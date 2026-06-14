@@ -16,10 +16,11 @@
 #   tools/start-stack.sh staggered
 #   tools/start-stack.sh simultaneous
 #   tools/start-stack.sh teardown
+#   tools/start-stack.sh staggered --week week-14        # results -> phase-3.../week-14/results/
 #   tools/start-stack.sh staggered --model-12b <id> --model-31b <id> --mml-12b 131072 \
 #                                  --mml-31b 33024 --util-12b 0.90 --util-31b 0.95
 #
-# Results path: phase-3-optimization-and-quantization/week-13/results/
+# Results path: phase-3-optimization-and-quantization/<week>/results/   (--week; default week-13)
 #
 # ============================================================================================
 # >>> LAUNCHER SEAM — flags reconciled against the actual arg-parsing of both launchers <<<
@@ -54,6 +55,7 @@ LAUNCHER_12B="tools/start-12b-qat.sh"
 LAUNCHER_31B="tools/start-vllm.sh"
 PROBE_INTERVAL=2
 PROBE_TIMEOUT=420
+WEEK="week-13"          # phase-3 week subdir for the default results path; override with --week
 RESULTS_DIR=""          # resolved below relative to repo root unless overridden
 OUT_FILE=""             # default computed from models + mode
 HOST_CAPTURE=1          # iostat/free background sampling
@@ -73,6 +75,7 @@ while [[ $# -gt 0 ]]; do
     --mml-31b)   MML_31B="$2";   shift 2 ;;
     --util-12b)  UTIL_12B="$2";  shift 2 ;;
     --util-31b)  UTIL_31B="$2";  shift 2 ;;
+    --week)        WEEK="$2";        shift 2 ;;
     --results-dir) RESULTS_DIR="$2"; shift 2 ;;
     --out)       OUT_FILE="$2";  shift 2 ;;
     --probe-interval) PROBE_INTERVAL="$2"; shift 2 ;;
@@ -99,7 +102,7 @@ log()     { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 # is reliable here because the script is always invoked as a file, never sourced/piped.)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-[[ -z "$RESULTS_DIR" ]] && RESULTS_DIR="$ROOT/phase-3-optimization-and-quantization/week-13/results"
+[[ -z "$RESULTS_DIR" ]] && RESULTS_DIR="$ROOT/phase-3-optimization-and-quantization/$WEEK/results"
 mkdir -p "$RESULTS_DIR"
 
 GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo UNKNOWN)"
