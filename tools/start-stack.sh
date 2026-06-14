@@ -91,8 +91,14 @@ slugify() { basename "$1" | tr '/:@' '___' | tr -cs 'A-Za-z0-9._-' '-' | sed 's/
 ts_utc()  { date -u +%Y-%m-%dT%H:%M:%SZ; }
 log()     { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 
-repo_root() { git rev-parse --show-toplevel 2>/dev/null || pwd; }
-ROOT="$(repo_root)"
+# Anchor to the SCRIPT's own location, NOT cwd. tools/ is one level under the repo root.
+# This is invariant to (a) the directory the script is invoked from and (b) where the repo
+# is cloned. The prior `git rev-parse --show-toplevel` resolved the toplevel of whichever
+# checkout cwd happened to sit in — so running this from inside the inference-reference-stack
+# repo retargeted RESULTS_DIR, GIT_SHA, and the launcher paths at the wrong repo. (BASH_SOURCE
+# is reliable here because the script is always invoked as a file, never sourced/piped.)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 [[ -z "$RESULTS_DIR" ]] && RESULTS_DIR="$ROOT/phase-3-optimization-and-quantization/week-13/results"
 mkdir -p "$RESULTS_DIR"
 
