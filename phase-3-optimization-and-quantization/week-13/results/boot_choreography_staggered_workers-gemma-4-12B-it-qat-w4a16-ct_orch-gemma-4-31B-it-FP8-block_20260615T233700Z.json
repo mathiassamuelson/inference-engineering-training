@@ -1,0 +1,79 @@
+{
+  "experiment": "boot_choreography",
+  "mode": "staggered",
+  "timestamp_utc": "2026-06-15T23:41:45Z",
+  "git_sha": "70791092f6b7ca62bf342ec84203f96ff7b7476a",
+  "image_requested": "vllm/vllm-openai:v0.23.0",
+  "host": "inference",
+  "probe": {
+    "endpoint": "/v1/chat/completions",
+    "interval_s": 2.0,
+    "timeout_s": 420.0
+  },
+  "host_mem_mb": {
+    "available_at_start": 58557,
+    "available_at_steady": 42235,
+    "swap_used_at_steady": 64
+  },
+  "services": [
+    {
+      "tier": "worker1",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "gpus_requested": "1",
+      "port": 8001,
+      "max_model_len": 131072,
+      "gpu_memory_utilization": 0.9,
+      "launcher": "tools/start-vllm.sh",
+      "launch_offset_s": 0.0,
+      "time_to_healthy_s": 91.23,
+      "placement_observed": "1:GPU-a7370cb3-24e2-9656-132e-a5b71fd76398:21260MB",
+      "placement_ok": true,
+      "image_digest": "vllm/vllm-openai@sha256:6d8429e38e3747723ca07ee1b17972e09bb9c51c4032b266f24fb1cc3b22ed8f"
+    },
+    {
+      "tier": "worker2",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "gpus_requested": "3",
+      "port": 8003,
+      "max_model_len": 131072,
+      "gpu_memory_utilization": 0.9,
+      "launcher": "tools/start-vllm.sh",
+      "launch_offset_s": 91.23,
+      "time_to_healthy_s": 83.2,
+      "placement_observed": "3:GPU-0da3bc5b-8e8b-16e7-8eee-5084ea3d2c82:21260MB",
+      "placement_ok": true,
+      "image_digest": "vllm/vllm-openai@sha256:6d8429e38e3747723ca07ee1b17972e09bb9c51c4032b266f24fb1cc3b22ed8f"
+    },
+    {
+      "tier": "orchestrator",
+      "model": "RedHatAI/gemma-4-31B-it-FP8-block",
+      "gpus_requested": "0,2",
+      "port": 8000,
+      "max_model_len": 33024,
+      "gpu_memory_utilization": 0.95,
+      "launcher": "tools/start-vllm.sh",
+      "launch_offset_s": 174.43,
+      "time_to_healthy_s": 105.42,
+      "placement_observed": "0:GPU-3a7eac76-25ae-edf8-eb11-d6b846ffb56f:23470MB;2:GPU-8b223d02-aa0f-426b-470e-df5b3873d7ba:23470MB",
+      "placement_ok": true,
+      "image_digest": "vllm/vllm-openai@sha256:6d8429e38e3747723ca07ee1b17972e09bb9c51c4032b266f24fb1cc3b22ed8f"
+    }
+  ],
+  "steady_state_containers": [
+    {
+      "name": "gemma4-31b-tp2",
+      "mem": "7.969GiB / 60.44GiB",
+      "perc": "13.18%"
+    },
+    {
+      "name": "gemma4-12b-qat-gpu3",
+      "mem": "3.916GiB / 60.44GiB",
+      "perc": "6.48%"
+    },
+    {
+      "name": "gemma4-12b-qat-gpu1",
+      "mem": "4.245GiB / 60.44GiB",
+      "perc": "7.02%"
+    }
+  ]
+}
