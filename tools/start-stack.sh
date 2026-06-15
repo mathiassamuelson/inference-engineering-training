@@ -17,18 +17,24 @@
 #   tools/start-stack.sh simultaneous
 #   tools/start-stack.sh teardown
 #   tools/start-stack.sh staggered --week week-14        # results -> phase-3.../week-14/results/
+#   tools/start-stack.sh staggered --image vllm/vllm-openai:v0.23.0   # override the single image
 #   tools/start-stack.sh staggered --model-12b <id> --model-31b <id> --mml-12b 131072 \
 #                                  --mml-31b 33024 --util-12b 0.90 --util-31b 0.95
 #
 # Results path: phase-3-optimization-and-quantization/<week>/results/   (--week; default week-13)
 #
 # ============================================================================================
-# >>> LAUNCHER SEAM — flags reconciled against the actual arg-parsing of both launchers <<<
-#   start-12b-qat.sh : --model --gpu --port --max-model-len --gpu-mem-util --name
-#   start-vllm.sh    : --model --mode tp --size 2 --gpus --port --max-model-len --gpu-mem-util --name
+# >>> LAUNCHER SEAM — one native launcher (start-vllm.sh) now serves BOTH tiers <<<
+#   start-vllm.sh : --model --mode tp --size N --gpus --port --max-model-len --gpu-mem-util \
+#                   --image --name
+#   Convergence (Week 13 Day 4/5): the gemma4-unified scaffolding launcher (start-12b-qat.sh)
+#   and its source patch are RETIRED — v0.23.0 boots the 12B natively (Marlin INT4, no source
+#   patch, no --hf-overrides blob). Workers are TP=1 (--mode tp --size 1 --gpus <single id>);
+#   orchestrator is TP=2 (--mode tp --size 2 --gpus 0,2). Both tiers run the SAME image, pinned
+#   here and threaded to each launcher via --image.
 #   Notes: 31B launcher MML default is 131072 (provisional) -> we pass 33024 (Week 11 baseline).
-#          Both workers need DISTINCT --name (launcher default gemma4-12b-qat collides). Util
-#          flag is --gpu-mem-util. TP is --mode tp --size 2; --gpus selects the NVLink pair.
+#          Both workers need DISTINCT --name (start-vllm.sh derives NAME=vllm-tp1 for both ->
+#          the 2nd docker run collides without distinct names). Util flag is --gpu-mem-util.
 # ============================================================================================
 
 set -euo pipefail
@@ -38,21 +44,25 @@ MODEL_12B="google/gemma-4-12B-it-qat-w4a16-ct"
 MODEL_31B="RedHatAI/gemma-4-31B-it-FP8-block"
 MML_12B=131072
 MML_31B=33024
-UTIL_12B=0.90           # start-12b-qat.sh default
-UTIL_31B=0.95           # MML 33024 needs 0.95: at 0.90 the v0.21.0 cudagraph-profiling tax
-                        # cuts effective util to ~0.859 -> ~2.86 GiB KV -> ceiling ~23,616 < 33024
-                        # (refuses to boot). Week 11 baseline 33024 was characterized at 0.95.
+UTIL_12B=0.90           # 12B native (v0.23.0) verified at util 0.90
+UTIL_31B=0.95           # MML 33024 needs 0.95: the cudagraph-profiling tax (persists on the
+                        # standard runner under v0.23.0) cuts effective util to ~0.9093, so a
+                        # nominal 0.90 leaves too little KV to admit a 33024 pool. Week 11
+                        # baseline 33024 was characterized at 0.95; Day 4 re-baseline confirmed.
 PORT_W1=8001
 PORT_W2=8003
 PORT_ORCH=8000
 GPUS_W1="1"
 GPUS_W2="3"
 GPUS_ORCH="0,2"
-NAME_W1="gemma4-12b-qat-gpu1"   # distinct names: start-12b-qat.sh defaults NAME=gemma4-12b-qat
-NAME_W2="gemma4-12b-qat-gpu3"   # for BOTH workers -> the 2nd docker run collides without this
+NAME_W1="gemma4-12b-qat-gpu1"   # distinct names required: start-vllm.sh derives NAME=vllm-tp1
+NAME_W2="gemma4-12b-qat-gpu3"   # for BOTH workers -> the 2nd docker run collides without these
 NAME_ORCH="gemma4-31b-tp2"
-LAUNCHER_12B="tools/start-12b-qat.sh"
+LAUNCHER_12B="tools/start-vllm.sh"   # convergence: native launcher serves both tiers (was start-12b-qat.sh)
 LAUNCHER_31B="tools/start-vllm.sh"
+IMAGE="vllm/vllm-openai:v0.23.0"     # ONE image, both tiers (Week 13 convergence).
+                                     # digest: sha256:6d8429e38e3747723ca07ee1b17972e09bb9c51c4032b266f24fb1cc3b22ed8f
+                                     # pre-session check verifies this tag resolves to that digest.
 PROBE_INTERVAL=2
 PROBE_TIMEOUT=420
 WEEK="week-13"          # phase-3 week subdir for the default results path; override with --week
@@ -75,6 +85,7 @@ while [[ $# -gt 0 ]]; do
     --mml-31b)   MML_31B="$2";   shift 2 ;;
     --util-12b)  UTIL_12B="$2";  shift 2 ;;
     --util-31b)  UTIL_31B="$2";  shift 2 ;;
+    --image)     IMAGE="$2";     shift 2 ;;
     --week)        WEEK="$2";        shift 2 ;;
     --results-dir) RESULTS_DIR="$2"; shift 2 ;;
     --out)       OUT_FILE="$2";  shift 2 ;;
@@ -130,7 +141,14 @@ probe_healthy() {  # $1=port  $2=model
   [[ "$code" == "200" ]] && grep -q '"choices"' "$body"
 }
 
-container_for_port() { docker ps --filter "publish=$1" --format '{{.ID}}' | head -n1; }
+# Container lookup by the deterministic per-tier --name (NOT by published port).
+# start-vllm.sh launches with --network host and no `-p` mapping, so host-network containers
+# publish nothing and a `--filter publish=` query returns empty -> image_digest would be
+# UNKNOWN for every tier under the converged single-launcher layout. Exact-matching the name
+# is robust across host- and bridge-network launchers and across docker's name-storage quirks.
+container_for_name() {  # $1=exact container name
+  docker ps --format '{{.ID}} {{.Names}}' | awk -v n="$1" '$2==n{print $1; exit}'
+}
 image_tag_for_container()    { docker inspect --format '{{.Config.Image}}' "$1" 2>/dev/null; }
 image_digest_for_tag()       { docker image inspect --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{else}}{{.Id}}{{end}}' "$1" 2>/dev/null || echo UNKNOWN; }
 
@@ -148,17 +166,24 @@ if [[ "$MODE" == "teardown" ]]; then teardown_stack; exit 0; fi
 [[ "$TEARDOWN_FIRST" == "1" ]] && teardown_stack
 
 # ============================================================================================
-# >>> EDITABLE SEAM: launcher invocations. Confirm flag names against the real launchers. <<<
+# >>> EDITABLE SEAM: launcher invocations. Confirm flag names against the real launcher. <<<
 # Each launch runs in the background so the orchestrator can probe regardless of whether the
 # launcher blocks (foreground docker run) or detaches.
+#
+# Both tiers now route through the SAME native launcher (start-vllm.sh):
+#   workers      -> --mode tp --size 1 --gpus <single id>   (single-GPU TP=1, x1 link irrelevant)
+#   orchestrator -> --mode tp --size 2 --gpus 0,2           (NVLink pair)
+# --image threads the converged image to both. No patch mount, no --hf-overrides.
 # ============================================================================================
 launch_12b() {  # $1=gpu  $2=port  $3=model  $4=mml  $5=util  $6=name
   "$ROOT/$LAUNCHER_12B" \
     --model "$3" \
-    --gpu "$1" \
+    --mode tp --size 1 \
+    --gpus "$1" \
     --port "$2" \
     --max-model-len "$4" \
     --gpu-mem-util "$5" \
+    --image "$IMAGE" \
     --name "$6"
 }
 launch_31b() {  # $1=gpus  $2=port  $3=model  $4=mml  $5=util  $6=name
@@ -169,6 +194,7 @@ launch_31b() {  # $1=gpus  $2=port  $3=model  $4=mml  $5=util  $6=name
     --port "$2" \
     --max-model-len "$4" \
     --gpu-mem-util "$5" \
+    --image "$IMAGE" \
     --name "$6"
 }
 # ============================================================================================
@@ -262,7 +288,7 @@ JSON_OUT="$RESULTS_DIR/${STEM}.json"
 T0="$(now)"
 FREE_START_MB="$(free -m | awk '/^Mem:/{print $7}')"   # 'available' column
 start_host_capture "$STEM"
-log "MODE=$MODE  t0 set.  free(avail)=${FREE_START_MB}MB  results=$RESULTS_DIR"
+log "MODE=$MODE  t0 set.  free(avail)=${FREE_START_MB}MB  image=$IMAGE  results=$RESULTS_DIR"
 
 if [[ "$MODE" == "staggered" ]]; then
   for spec in "${SPECS[@]}"; do
@@ -292,7 +318,7 @@ for spec in "${SPECS[@]}"; do
   offset="NA"; t2h="NA"
   [[ -n "$lt" ]] && offset="$(elapsed "$T0" "$lt")"
   [[ -n "$lt" && -n "$ht" ]] && t2h="$(elapsed "$lt" "$ht")"
-  cid="$(container_for_port "$port")"
+  cid="$(container_for_name "$name")"
   digest="UNKNOWN"; [[ -n "$cid" ]] && digest="$(image_digest_for_tag "$(image_tag_for_container "$cid")")"
   # placement: every intended GPU index should be busy (used memory well above driver idle)
   pok="true"; obs_uuids=""
@@ -309,7 +335,7 @@ for spec in "${SPECS[@]}"; do
 done
 
 # ---- emit JSON (python for correct escaping) -----------------------------------------------
-MODE="$MODE" GIT_SHA="$GIT_SHA" TS="$(ts_utc)" \
+MODE="$MODE" GIT_SHA="$GIT_SHA" TS="$(ts_utc)" IMAGE="$IMAGE" \
 FREE_START="$FREE_START_MB" FREE_STEADY="$FREE_STEADY_MB" SWAP="$SWAP_USED_MB" \
 DOCKER_STATS="$DOCKER_STATS_JSON" PROBE_INTERVAL="$PROBE_INTERVAL" PROBE_TIMEOUT="$PROBE_TIMEOUT" \
 python3 - "$TSV" "$JSON_OUT" <<'PY'
@@ -335,6 +361,7 @@ doc = {
     "mode": os.environ["MODE"],
     "timestamp_utc": os.environ["TS"],
     "git_sha": os.environ["GIT_SHA"],
+    "image_requested": os.environ["IMAGE"],
     "host": os.uname().nodename,
     "probe": {"endpoint": "/v1/chat/completions",
               "interval_s": float(os.environ["PROBE_INTERVAL"]),
