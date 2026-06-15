@@ -132,16 +132,43 @@ import httpx
 BACKENDS = ("llamacpp", "vllm-openai")
 SCHEMA_VERSION = 3
 
+# Repo root = parent of tools/ (this script lives in tools/). Anchoring the default results
+# directory and the git provenance to the SCRIPT's location — not the CWD — keeps the output
+# location and the recorded git SHA invariant to where the sweep is launched from. (Mirrors
+# the BASH_SOURCE/repo-root anchoring used in tools/start-stack.sh.)
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
-def get_git_info() -> dict:
-    """Return git SHA and dirty-tree status for the current working directory."""
+
+def anchor_path(p: Path) -> Path:
+    """Resolve a relative path against the repo root (script location), not the CWD.
+    Absolute paths are returned unchanged, so callers retain an explicit escape hatch."""
+    return p if p.is_absolute() else (REPO_ROOT / p)
+
+
+def get_git_info(repo_root: Path, exclude: Optional[Path] = None) -> dict:
+    """Return git SHA and dirty-tree status for the script's repo.
+
+    Anchored to `repo_root` (via `git -C`), NOT the current working directory, so the
+    recorded SHA reflects the code that actually ran regardless of where the sweep was
+    launched. The dirty check excludes `exclude` (the results dir) when it lies inside the
+    repo: result files are expected to be uncommitted at write time, so only changes
+    OUTSIDE results/ mean the recorded SHA won't reflect the code/tools.
+    """
+    git = ["git", "-C", str(repo_root)]
     try:
         sha = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
+            git + ["rev-parse", "HEAD"],
             stderr=subprocess.DEVNULL,
         ).decode().strip()
+        status_cmd = git + ["status", "--porcelain", "--", "."]
+        if exclude is not None:
+            try:
+                rel = exclude.resolve().relative_to(repo_root.resolve())
+                status_cmd.append(f":(exclude){rel.as_posix()}")
+            except ValueError:
+                pass  # exclude is outside the repo — nothing to exclude, whole-tree check
         dirty = bool(subprocess.check_output(
-            ["git", "status", "--porcelain"],
+            status_cmd,
             stderr=subprocess.DEVNULL,
         ).decode().strip())
         return {"git_sha": sha, "dirty": dirty}
@@ -653,12 +680,16 @@ def main():
         default=None,
         help="Output JSON file. Default: "
              "<results-dir>/throughput_sweep_<backend>_<model>_c<N>[_<placement>]_<timestamp>.json "
-             "(placement segment included only when not 'na').",
+             "(placement segment included only when not 'na'). A relative path is anchored to "
+             "the repo root, same as --results-dir.",
     )
     parser.add_argument(
         "--results-dir",
         default="results",
-        help="Directory for default output filename (default: %(default)s).",
+        help="Directory for the default output filename (default: %(default)s). A RELATIVE "
+             "path resolves against the repo root (the script's location), NOT the current "
+             "directory, so output lands in the same place regardless of where you launch "
+             "from. Pass an absolute path to write elsewhere.",
     )
     args = parser.parse_args()
 
@@ -687,8 +718,10 @@ def main():
 
     # Resolve output path (model name and concurrency level both in the default filename
     # so runs against different models or concurrency levels never silently overwrite).
+    # Relative paths anchor to the repo root, not the CWD, so output lands in the same place
+    # regardless of where the sweep is launched from (see anchor_path).
     if args.output:
-        output_path = Path(args.output)
+        output_path = anchor_path(Path(args.output))
     else:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         slug = slugify_model_name(model_name)
@@ -697,7 +730,7 @@ def main():
             f"throughput_sweep_{args.backend}_{slug}_c{args.concurrency}"
             f"{placement_seg}_{timestamp}.json"
         )
-        output_path = Path(args.results_dir) / filename
+        output_path = anchor_path(Path(args.results_dir)) / filename
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Calibrate tokenizer behavior for this model
@@ -746,7 +779,7 @@ def main():
         "schema_version": SCHEMA_VERSION,
         "script": {
             "name": "throughput_sweep.py",
-            "git": get_git_info(),
+            "git": get_git_info(REPO_ROOT, exclude=output_path.parent),
         },
         "run": {
             "run_id": str(uuid.uuid4()),
