@@ -55,7 +55,8 @@ DEFAULT_JUDGE_MODEL = "claude-opus-4-8"   # CONFIRM/OVERRIDE with --judge-model.
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 JUDGE_MAX_TOKENS = 1500
-JUDGE_TEMPERATURE = 0.0
+JUDGE_TEMPERATURE = None   # None -> omit the field (required for 4.x models that deprecated it).
+                           # Set a float only for older models that still accept it.
 HTTP_TIMEOUT = 120.0
 MAX_RETRIES = 4
 
@@ -303,10 +304,11 @@ def call_judge(
     payload = {
         "model": judge_model,
         "max_tokens": JUDGE_MAX_TOKENS,
-        "temperature": JUDGE_TEMPERATURE,
         "system": JUDGE_SYSTEM_PROMPT,
         "messages": [{"role": "user", "content": user_prompt}],
     }
+    if JUDGE_TEMPERATURE is not None:
+        payload["temperature"] = JUDGE_TEMPERATURE
     headers = {
         "x-api-key": api_key,
         "anthropic-version": ANTHROPIC_VERSION,
