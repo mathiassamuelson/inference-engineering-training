@@ -318,8 +318,13 @@ def call_judge(
             resp = client.post(ANTHROPIC_URL, headers=headers, json=payload)
             if resp.status_code in (429, 500, 502, 503, 529):
                 raise httpx.HTTPStatusError(
-                    f"retryable status {resp.status_code}", request=resp.request, response=resp
+                    f"retryable status {resp.status_code}",
+                    request=resp.request,
+                    response=resp,
                 )
+            if 400 <= resp.status_code < 500:
+                # Permanent client error — do NOT retry; surface the API's reason.
+                raise RuntimeError(f"judge API {resp.status_code}: {resp.text}")
             resp.raise_for_status()
             data = resp.json()
             text = "".join(
