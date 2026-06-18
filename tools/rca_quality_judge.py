@@ -51,13 +51,13 @@ import httpx
 # --------------------------------------------------------------------------------------
 # Defaults
 # --------------------------------------------------------------------------------------
-DEFAULT_JUDGE_MODEL = "claude-opus-4-8"   # CONFIRM/OVERRIDE with --judge-model.
+DEFAULT_JUDGE_MODEL = "claude-opus-4-8"  # CONFIRM/OVERRIDE with --judge-model.
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 JUDGE_MAX_TOKENS = 1500
-JUDGE_TEMPERATURE = None   # None -> omit the field (required for 4.x models that
-                          # deprecated `temperature`). Set a float only for older
-                          # models that still accept it. Recorded honestly in metadata.
+JUDGE_TEMPERATURE = None  # None -> omit the field (required for 4.x models that
+# deprecated `temperature`). Set a float only for older
+# models that still accept it. Recorded honestly in metadata.
 HTTP_TIMEOUT = 120.0
 MAX_RETRIES = 4
 
@@ -239,9 +239,9 @@ def build_pairwise_prompt(
         f"<<<B>>>\n{completion_b}\n<<<END_B>>>\n\n"
         "For each rubric axis decide whether A or B is better, or 'tie' if they are "
         "equivalent in substance. Then give an overall verdict. Respond with ONLY a JSON "
-        "object with EXACTLY two top-level keys: \"axes\" (containing ONLY the rubric "
-        "axis keys listed above and nothing else) and \"overall\" (a SIBLING of "
-        "\"axes\" — never nested inside it). Use this shape:\n"
+        'object with EXACTLY two top-level keys: "axes" (containing ONLY the rubric '
+        'axis keys listed above and nothing else) and "overall" (a SIBLING of '
+        '"axes" — never nested inside it). Use this shape:\n'
         "{\n"
         '  "axes": {\n'
         f"{schema_axes}\n"
@@ -272,8 +272,8 @@ def build_pointwise_prompt(
         f"<<<RESPONSE>>>\n{completion}\n<<<END_RESPONSE>>>\n\n"
         "Score each rubric axis from 1 (poor) to 5 (excellent). Then give an overall "
         "score. Respond with ONLY a JSON object with EXACTLY two top-level keys: "
-        "\"axes\" (containing ONLY the rubric axis keys listed above and nothing else) "
-        "and \"overall\" (a SIBLING of \"axes\" — never nested inside it). Use this "
+        '"axes" (containing ONLY the rubric axis keys listed above and nothing else) '
+        'and "overall" (a SIBLING of "axes" — never nested inside it). Use this '
         "shape:\n"
         "{\n"
         '  "axes": {\n'
@@ -372,7 +372,9 @@ def call_judge(
             resp = client.post(ANTHROPIC_URL, headers=headers, json=payload)
             if resp.status_code in (429, 500, 502, 503, 529):
                 raise httpx.HTTPStatusError(
-                    f"retryable status {resp.status_code}", request=resp.request, response=resp
+                    f"retryable status {resp.status_code}",
+                    request=resp.request,
+                    response=resp,
                 )
             if 400 <= resp.status_code < 500:
                 # Permanent client error — do NOT retry; surface the API's reason.
@@ -380,7 +382,9 @@ def call_judge(
             resp.raise_for_status()
             data = resp.json()
             text = "".join(
-                b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"
+                b.get("text", "")
+                for b in data.get("content", [])
+                if b.get("type") == "text"
             )
             parsed = extract_json(text)
             if validate is not None:
@@ -391,15 +395,22 @@ def call_judge(
         except (httpx.HTTPError, json.JSONDecodeError, SchemaError) as e:
             last_err = e
             if isinstance(e, SchemaError):
-                print(f"  [retry] judge schema violation (attempt {attempt}): {e}", file=sys.stderr)
+                print(
+                    f"  [retry] judge schema violation (attempt {attempt}): {e}",
+                    file=sys.stderr,
+                )
             if attempt < MAX_RETRIES:
-                time.sleep(min(2 ** attempt, 16))
+                time.sleep(min(2**attempt, 16))
     raise RuntimeError(f"judge call failed after {MAX_RETRIES} attempts: {last_err}")
 
 
 def acc_usage(total: dict[str, int], usage: dict[str, Any]) -> None:
-    total["input_tokens"] = total.get("input_tokens", 0) + int(usage.get("input_tokens", 0) or 0)
-    total["output_tokens"] = total.get("output_tokens", 0) + int(usage.get("output_tokens", 0) or 0)
+    total["input_tokens"] = total.get("input_tokens", 0) + int(
+        usage.get("input_tokens", 0) or 0
+    )
+    total["output_tokens"] = total.get("output_tokens", 0) + int(
+        usage.get("output_tokens", 0) or 0
+    )
     total["judge_calls"] = total.get("judge_calls", 0) + 1
 
 
@@ -432,7 +443,10 @@ def score_pairwise(
     usage_total: dict[str, int] = {}
     validate = make_validator(axis_keys, "pairwise")
     # Tallies are model-relative (model_a / model_b / tie / order_sensitive).
-    axis_tally = {k: {"model_a": 0, "model_b": 0, "tie": 0, "order_sensitive": 0} for k in axis_keys}
+    axis_tally = {
+        k: {"model_a": 0, "model_b": 0, "tie": 0, "order_sensitive": 0}
+        for k in axis_keys
+    }
     overall_tally = {"model_a": 0, "model_b": 0, "tie": 0, "order_sensitive": 0}
 
     for rid in common:
@@ -456,8 +470,12 @@ def score_pairwise(
 
         axes_result: dict[str, Any] = {}
         for k in axis_keys:
-            w1 = _map_winner(j1.get("axes", {}).get(k, {}).get("winner", "tie"), swapped=False)
-            w2 = _map_winner(j2.get("axes", {}).get(k, {}).get("winner", "tie"), swapped=True)
+            w1 = _map_winner(
+                j1.get("axes", {}).get(k, {}).get("winner", "tie"), swapped=False
+            )
+            w2 = _map_winner(
+                j2.get("axes", {}).get(k, {}).get("winner", "tie"), swapped=True
+            )
             if w1 == w2:
                 consensus, order_sensitive = w1, False
             else:
@@ -519,7 +537,9 @@ def score_pairwise(
 # --------------------------------------------------------------------------------------
 # Pointwise scoring
 # --------------------------------------------------------------------------------------
-def score_pointwise(client, api_key, judge_model, cap, rubric, reference_prompt, limit, dry_run):
+def score_pointwise(
+    client, api_key, judge_model, cap, rubric, reference_prompt, limit, dry_run
+):
     records = cap["results"][:limit] if limit else cap["results"]
     axis_keys = [a["key"] for a in rubric]
     per_probe: list[dict[str, Any]] = []
@@ -548,8 +568,15 @@ def score_pointwise(client, api_key, judge_model, cap, rubric, reference_prompt,
         ov = j.get("overall", {})
         if isinstance(ov.get("score"), (int, float)):
             overall_sum += ov["score"]
-        per_probe.append({"id": rid, "title": r.get("title", ""), "axes": axes,
-                          "overall": ov, "_raw": raw})
+        per_probe.append(
+            {
+                "id": rid,
+                "title": r.get("title", ""),
+                "axes": axes,
+                "overall": ov,
+                "_raw": raw,
+            }
+        )
         print(f"  scored {rid:<28} overall={ov.get('score')}")
 
     n = max(len(per_probe), 1)
@@ -570,19 +597,37 @@ def main() -> int:
         description="LLM-judge quality scorer for operator-copilot RCA captures (multi-model)."
     )
     ap.add_argument("--mode", choices=["pairwise", "pointwise"], default="pairwise")
-    ap.add_argument("--a", help="pairwise: result JSON for model A (or the single file for pointwise)")
+    ap.add_argument(
+        "--a",
+        help="pairwise: result JSON for model A (or the single file for pointwise)",
+    )
     ap.add_argument("--b", help="pairwise: result JSON for model B")
-    ap.add_argument("--judge-model", default=DEFAULT_JUDGE_MODEL,
-                    help="Judge model id sent to the Anthropic API and recorded everywhere.")
-    ap.add_argument("--reference-prompt",
-                    help="Path to the operator-copilot system prompt; given to the judge as "
-                         "grounds for scope/guardrail scoring. Recommended.")
+    ap.add_argument(
+        "--judge-model",
+        default=DEFAULT_JUDGE_MODEL,
+        help="Judge model id sent to the Anthropic API and recorded everywhere.",
+    )
+    ap.add_argument(
+        "--reference-prompt",
+        help="Path to the operator-copilot system prompt; given to the judge as "
+        "grounds for scope/guardrail scoring. Recommended.",
+    )
     ap.add_argument("--rubric-file", help="JSON overriding the default rubric axes.")
     ap.add_argument("--results-dir", default=".", help="Directory for the output JSON.")
-    ap.add_argument("--output", help="Explicit output path (default includes model + judge names).")
-    ap.add_argument("--limit", type=int, default=0, help="Score only the first N probes (debug/cost).")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="Print the assembled judge prompts and exit without calling the API.")
+    ap.add_argument(
+        "--output", help="Explicit output path (default includes model + judge names)."
+    )
+    ap.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Score only the first N probes (debug/cost).",
+    )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the assembled judge prompts and exit without calling the API.",
+    )
     args = ap.parse_args()
 
     if args.mode == "pairwise" and (not args.a or not args.b):
@@ -591,7 +636,9 @@ def main() -> int:
         ap.error("pointwise mode requires --a (the single result file)")
 
     rubric = load_rubric(args.rubric_file)
-    reference_prompt = Path(args.reference_prompt).read_text() if args.reference_prompt else None
+    reference_prompt = (
+        Path(args.reference_prompt).read_text() if args.reference_prompt else None
+    )
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key and not args.dry_run:
@@ -615,17 +662,36 @@ def main() -> int:
     print(f"  reference    : {'yes' if reference_prompt else 'no'}")
     print(f"  tool git_sha : {git['tool_git_sha']}  dirty={git['tool_git_dirty']}")
     if git["tool_git_dirty"] and not args.dry_run:
-        print("  WARNING: working tree is dirty -- commit the tool before recording results.")
+        print(
+            "  WARNING: working tree is dirty -- commit the tool before recording results."
+        )
     print("=" * 72)
 
     client = None if args.dry_run else httpx.Client(timeout=HTTP_TIMEOUT)
     try:
         if args.mode == "pairwise":
-            scored = score_pairwise(client, api_key, args.judge_model, cap_a, cap_b,
-                                    rubric, reference_prompt, args.limit, args.dry_run)
+            scored = score_pairwise(
+                client,
+                api_key,
+                args.judge_model,
+                cap_a,
+                cap_b,
+                rubric,
+                reference_prompt,
+                args.limit,
+                args.dry_run,
+            )
         else:
-            scored = score_pointwise(client, api_key, args.judge_model, cap_a,
-                                     rubric, reference_prompt, args.limit, args.dry_run)
+            scored = score_pointwise(
+                client,
+                api_key,
+                args.judge_model,
+                cap_a,
+                rubric,
+                reference_prompt,
+                args.limit,
+                args.dry_run,
+            )
     finally:
         if client:
             client.close()
@@ -658,11 +724,15 @@ def main() -> int:
         out_path = Path(args.output)
     else:
         if args.mode == "pairwise":
-            fname = (f"judge_pairwise_{sanitize(cap_a['model'])}_vs_"
-                     f"{sanitize(cap_b['model'])}_by_{sanitize(args.judge_model)}_{stamp}.json")
+            fname = (
+                f"judge_pairwise_{sanitize(cap_a['model'])}_vs_"
+                f"{sanitize(cap_b['model'])}_by_{sanitize(args.judge_model)}_{stamp}.json"
+            )
         else:
-            fname = (f"judge_pointwise_{sanitize(cap_a['model'])}_"
-                     f"by_{sanitize(args.judge_model)}_{stamp}.json")
+            fname = (
+                f"judge_pointwise_{sanitize(cap_a['model'])}_"
+                f"by_{sanitize(args.judge_model)}_{stamp}.json"
+            )
         out_path = Path(args.results_dir) / fname
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(out, indent=2))
@@ -670,16 +740,20 @@ def main() -> int:
     print("\n--- summary ---")
     if args.mode == "pairwise":
         ot = scored["overall_tally"]
-        print(f"  overall: model_a={ot['model_a']}  model_b={ot['model_b']}  "
-              f"tie={ot['tie']}  (order-sensitive: {ot['order_sensitive']})")
+        print(
+            f"  overall: model_a={ot['model_a']}  model_b={ot['model_b']}  "
+            f"tie={ot['tie']}  (order-sensitive: {ot['order_sensitive']})"
+        )
         print(f"  model_a = {cap_a['model']}")
         print(f"  model_b = {cap_b['model']}")
     else:
         print(f"  overall mean: {scored['overall_mean']}")
         print(f"  axis means  : {scored['axis_means']}")
     u = scored["usage"]
-    print(f"  judge calls : {u.get('judge_calls', 0)}  "
-          f"tokens in/out: {u.get('input_tokens', 0)}/{u.get('output_tokens', 0)}")
+    print(
+        f"  judge calls : {u.get('judge_calls', 0)}  "
+        f"tokens in/out: {u.get('input_tokens', 0)}/{u.get('output_tokens', 0)}"
+    )
     print(f"\n  wrote: {out_path}")
     return 0
 
