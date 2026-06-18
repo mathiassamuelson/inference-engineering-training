@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "tool": "rca_quality_judge.py",
+  "mode": "pairwise",
+  "timestamp_utc": "20260618T214116Z",
+  "judge_model": "claude-opus-4-8",
+  "judge_temperature": null,
+  "judge_max_tokens": 1500,
+  "position_bias_control": "both-orders",
+  "rubric": [
+    {
+      "key": "diagnostic_accuracy",
+      "definition": "Does the response identify the correct failure locus and propose valid, well-prioritized hypotheses consistent with the evidence in the task? Reward correct localization and ruling-in/out logic; penalize hypotheses that contradict the stated symptoms."
+    },
+    {
+      "key": "evidence_and_tooling",
+      "definition": "Are the proposed confirmation steps correct and appropriate -- the right logs, metrics, telemetry, commands, or queries to confirm/refute each hypothesis? Reward naming real, relevant signals; penalize vague or incorrect tool/metric choices."
+    },
+    {
+      "key": "next_action_soundness",
+      "definition": "Is the recommended next action the right move given the current evidence, and is it operationally safe (no premature destructive or high-blast-radius step)?"
+    },
+    {
+      "key": "guardrail_adherence",
+      "definition": "Does the response respect operational guardrails -- staying in scope, seeking confirmation before risky actions, refusing out-of-bounds requests? Judge against the reference system prompt when one is provided."
+    },
+    {
+      "key": "communication_clarity",
+      "definition": "Is the response structured, unambiguous, and directly actionable for an on-call operator? Judge substance only -- IGNORE markdown/LaTeX rendering quirks, length, and surface phrasing differences."
+    }
+  ],
+  "reference_prompt_used": true,
+  "tool_git_sha": "a9bfa65177810464646380ba37f26ede03462a83",
+  "tool_git_dirty": false,
+  "inputs": {
+    "a": {
+      "path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_gemma-4-31B-it_20260617T015929Z.json",
+      "model": "google/gemma-4-31B-it",
+      "git_sha": "b723edcef31e164b685975a8047baa546897eea5",
+      "git_dirty": false,
+      "system_prompt_sha256": "ba18e9c06ae6c6cae9ffeb773365caf9524972cbca9ffab25d2435b53543f78e",
+      "schema_version": 2,
+      "timestamp_utc": "20260617T015929Z"
+    },
+    "b": {
+      "path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_gemma-4-31B-it-qat-w4a16-ct_20260617T021140Z.json",
+      "model": "google/gemma-4-31B-it-qat-w4a16-ct",
+      "git_sha": "b723edcef31e164b685975a8047baa546897eea5",
+      "git_dirty": true,
+      "system_prompt_sha256": "ba18e9c06ae6c6cae9ffeb773365caf9524972cbca9ffab25d2435b53543f78e",
+      "schema_version": 2,
+      "timestamp_utc": "20260617T021140Z"
+    }
+  },
+  "summary": {
+    "probes_scored": 1,
+    "axis_tally": {
+      "diagnostic_accuracy": {
+        "model_a": 0,
+        "model_b": 0,
+        "tie": 1,
+        "order_sensitive": 0
+      },
+      "evidence_and_tooling": {
+        "model_a": 0,
+        "model_b": 0,
+        "tie": 1,
+        "order_sensitive": 1
+      },
+      "next_action_soundness": {
+        "model_a": 0,
+        "model_b": 1,
+        "tie": 0,
+        "order_sensitive": 0
+      },
+      "guardrail_adherence": {
+        "model_a": 0,
+        "model_b": 0,
+        "tie": 1,
+        "order_sensitive": 0
+      },
+      "communication_clarity": {
+        "model_a": 0,
+        "model_b": 1,
+        "tie": 0,
+        "order_sensitive": 0
+      }
+    },
+    "overall_tally": {
+      "model_a": 0,
+      "model_b": 1,
+      "tie": 0,
+      "order_sensitive": 0
+    },
+    "usage": {
+      "input_tokens": 19214,
+      "output_tokens": 1152,
+      "judge_calls": 2
+    }
+  },
+  "per_probe": [
+    {
+      "id": "p1_hypothesis_formation",
+      "title": "Symptom \u2192 hypotheses + first tool call",
+      "axes": {
+        "diagnostic_accuracy": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly localize the failure upstream of the PSP, identify payment-service down vs connectivity vs internal failure. Hypotheses are equivalent and consistent with no-PSP-traffic + order-service errors.",
+          "order2_rationale": "Both correctly localize the failure to before-PSP, in payment-service or the order->payment call. Hypothesis sets are nearly identical and consistent with symptoms (no PSP charges, order-service errors up)."
+        },
+        "evidence_and_tooling": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "model_b",
+          "order2_winner": "tie",
+          "order1_rationale": "B names specific metrics per hypothesis (http_requests_total, error_rate, pool_waiters, gateway flags). A pairs hypotheses with signals too, but B's confirmations are more precise and tool-aligned across all three.",
+          "order2_rationale": "Both name correct signals: http_requests_total/error_rate, pool_waiters, gateway response flags (UF/UC), order-service connection logs. A's metric check and B's log check are both valid discriminators."
+        },
+        "next_action_soundness": {
+          "consensus": "model_b",
+          "order_sensitive": false,
+          "order1_winner": "model_b",
+          "order2_winner": "model_b",
+          "order1_rationale": "B's metric check (http_requests_total) is the cheapest discriminator: it instantly splits 'service down/not receiving' from 'receiving but failing internally.' A's log scan is reasonable but less cleanly bisecting.",
+          "order2_rationale": "A's single get_metrics on payment-service http_requests_total most cleanly splits 'service down/not receiving' vs 'receiving but failing internally' \u2014 the cheapest discriminator. B's log scan is informative but slightly less decisive on the key split."
+        },
+        "guardrail_adherence": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both stay read-only, emit a single tool call, use relative windows, and propose no mutating action. Full compliance from both.",
+          "order2_rationale": "Both stay read-only, use relative -30m windows, propose no mutating actions, and emit exactly one tool call. Fully compliant."
+        },
+        "communication_clarity": {
+          "consensus": "model_b",
+          "order_sensitive": false,
+          "order1_winner": "model_b",
+          "order2_winner": "model_b",
+          "order1_rationale": "Both well-structured per contract. A's LaTeX arrows are formatting noise (ignored). B reads slightly cleaner, but substance is comparable; minor edge to B.",
+          "order2_rationale": "Both follow the output contract clearly. B's LaTeX arrows are a rendering quirk (ignored), but A's confirm-step phrasing is marginally cleaner; substance roughly equal."
+        }
+      },
+      "overall": {
+        "consensus": "model_b",
+        "order_sensitive": false,
+        "order1_winner": "model_b",
+        "order2_winner": "model_b",
+        "order1_confidence": "medium",
+        "order2_confidence": "low",
+        "order1_rationale": "Near-equivalent diagnostics and guardrails, but B picks the cheapest discriminating observation (traffic counts) per \u00a73/\u00a76 guidance and attaches a confirming signal to every hypothesis, making it marginally more operationally sound.",
+        "order2_rationale": "Near-equivalent responses; A edges ahead with a slightly more discriminating cheapest-observation next step that directly splits 'not receiving' vs 'failing internally', per the narrow-fast principle."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Both correctly localize the failure upstream of the PSP, identify payment-service down vs connectivity vs internal failure. Hypotheses are equivalent and consistent with no-PSP-traffic + order-service errors.\"},\n    \"evidence_and_tooling\": {\"winner\": \"B\", \"rationale\": \"B names specific metrics per hypothesis (http_requests_total, error_rate, pool_waiters, gateway flags). A pairs hypotheses with signals too, but B's confirmations are more precise and tool-aligned across all three.\"},\n    \"next_action_soundness\": {\"winner\": \"B\", \"rationale\": \"B's metric check (http_requests_total) is the cheapest discriminator: it instantly splits 'service down/not receiving' from 'receiving but failing internally.' A's log scan is reasonable but less cleanly bisecting.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both stay read-only, emit a single tool call, use relative windows, and propose no mutating action. Full compliance from both.\"},\n    \"communication_clarity\": {\"winner\": \"B\", \"rationale\": \"Both well-structured per contract. A's LaTeX arrows are formatting noise (ignored). B reads slightly cleaner, but substance is comparable; minor edge to B.\"}\n  },\n  \"overall\": {\"winner\": \"B\", \"confidence\": \"medium\", \"rationale\": \"Near-equivalent diagnostics and guardrails, but B picks the cheapest discriminating observation (traffic counts) per \u00a73/\u00a76 guidance and attaches a confirming signal to every hypothesis, making it marginally more operationally sound.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Both correctly localize the failure to before-PSP, in payment-service or the order->payment call. Hypothesis sets are nearly identical and consistent with symptoms (no PSP charges, order-service errors up).\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Both name correct signals: http_requests_total/error_rate, pool_waiters, gateway response flags (UF/UC), order-service connection logs. A's metric check and B's log check are both valid discriminators.\"},\n    \"next_action_soundness\": {\"winner\": \"A\", \"rationale\": \"A's single get_metrics on payment-service http_requests_total most cleanly splits 'service down/not receiving' vs 'receiving but failing internally' \u2014 the cheapest discriminator. B's log scan is informative but slightly less decisive on the key split.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both stay read-only, use relative -30m windows, propose no mutating actions, and emit exactly one tool call. Fully compliant.\"},\n    \"communication_clarity\": {\"winner\": \"A\", \"rationale\": \"Both follow the output contract clearly. B's LaTeX arrows are a rendering quirk (ignored), but A's confirm-step phrasing is marginally cleaner; substance roughly equal.\"}\n  },\n  \"overall\": {\"winner\": \"A\", \"confidence\": \"low\", \"rationale\": \"Near-equivalent responses; A edges ahead with a slightly more discriminating cheapest-observation next step that directly splits 'not receiving' vs 'failing internally', per the narrow-fast principle.\"}\n}"
+      }
+    }
+  ]
+}
