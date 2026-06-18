@@ -55,8 +55,9 @@ DEFAULT_JUDGE_MODEL = "claude-opus-4-8"   # CONFIRM/OVERRIDE with --judge-model.
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 JUDGE_MAX_TOKENS = 1500
-JUDGE_TEMPERATURE = None   # None -> omit the field (required for 4.x models that deprecated it).
-                           # Set a float only for older models that still accept it.
+JUDGE_TEMPERATURE = None   # None -> omit the field (required for 4.x models that
+                          # deprecated `temperature`). Set a float only for older
+                          # models that still accept it. Recorded honestly in metadata.
 HTTP_TIMEOUT = 120.0
 MAX_RETRIES = 4
 
@@ -237,8 +238,10 @@ def build_pairwise_prompt(
         "Response B:\n"
         f"<<<B>>>\n{completion_b}\n<<<END_B>>>\n\n"
         "For each rubric axis decide whether A or B is better, or 'tie' if they are "
-        "equivalent in substance. Then give an overall verdict. Respond with ONLY this "
-        "JSON object:\n"
+        "equivalent in substance. Then give an overall verdict. Respond with ONLY a JSON "
+        "object with EXACTLY two top-level keys: \"axes\" (containing ONLY the rubric "
+        "axis keys listed above and nothing else) and \"overall\" (a SIBLING of "
+        "\"axes\" — never nested inside it). Use this shape:\n"
         "{\n"
         '  "axes": {\n'
         f"{schema_axes}\n"
@@ -268,7 +271,10 @@ def build_pointwise_prompt(
         "Assistant response:\n"
         f"<<<RESPONSE>>>\n{completion}\n<<<END_RESPONSE>>>\n\n"
         "Score each rubric axis from 1 (poor) to 5 (excellent). Then give an overall "
-        "score. Respond with ONLY this JSON object:\n"
+        "score. Respond with ONLY a JSON object with EXACTLY two top-level keys: "
+        "\"axes\" (containing ONLY the rubric axis keys listed above and nothing else) "
+        "and \"overall\" (a SIBLING of \"axes\" — never nested inside it). Use this "
+        "shape:\n"
         "{\n"
         '  "axes": {\n'
         f"{schema_axes}\n"
@@ -281,6 +287,10 @@ def build_pointwise_prompt(
 # --------------------------------------------------------------------------------------
 # Judge call
 # --------------------------------------------------------------------------------------
+class SchemaError(Exception):
+    """Judge returned syntactically-valid JSON that violates the required schema."""
+
+
 def extract_json(text: str) -> dict[str, Any]:
     """Parse a JSON object from the judge output, tolerating code fences / stray text."""
     cleaned = re.sub(r"```(?:json)?|```", "", text).strip()
@@ -294,14 +304,56 @@ def extract_json(text: str) -> dict[str, Any]:
         raise
 
 
+def make_validator(axis_keys: list[str], mode: str):
+    """Return a validator(parsed) -> list[str] of schema problems (empty == valid).
+
+    Enforces the contract the judge must follow, so we never accept malformed output
+    that only *happens* to parse (e.g. `overall` nested inside `axes`, or a duplicate
+    key resolved by luck). Any returned problems trigger a retry of the judge call.
+    """
+    expected = set(axis_keys)
+    field = "winner" if mode == "pairwise" else "score"
+
+    def _validate(parsed: Any) -> list[str]:
+        problems: list[str] = []
+        if not isinstance(parsed, dict):
+            return ["response is not a JSON object"]
+        axes = parsed.get("axes")
+        if not isinstance(axes, dict):
+            problems.append("missing or non-object 'axes'")
+            axes = {}
+        got = set(axes.keys())
+        extra, missing = got - expected, expected - got
+        if extra:
+            # This is exactly the `overall`-nested-in-`axes` failure mode.
+            problems.append(f"unexpected key(s) in 'axes': {sorted(extra)}")
+        if missing:
+            problems.append(f"missing axis key(s): {sorted(missing)}")
+        for k in expected & got:
+            if not isinstance(axes[k], dict) or field not in axes[k]:
+                problems.append(f"axis '{k}' missing '{field}'")
+        overall = parsed.get("overall")
+        if not isinstance(overall, dict) or field not in overall:
+            problems.append(f"missing/malformed top-level 'overall' (need '{field}')")
+        return problems
+
+    return _validate
+
+
 def call_judge(
     client: httpx.Client,
     api_key: str,
     judge_model: str,
     user_prompt: str,
+    validate=None,
 ) -> tuple[dict[str, Any], dict[str, Any], str]:
-    """Return (parsed_json, usage, raw_text). Retries on transient errors."""
-    payload = {
+    """Return (parsed_json, usage, raw_text).
+
+    Retries on transient HTTP errors AND on schema violations (when `validate` is
+    given). Fails fast on 4xx client errors, surfacing the API's response body —
+    a 4xx is permanent, so retrying it just hides the cause.
+    """
+    payload: dict[str, Any] = {
         "model": judge_model,
         "max_tokens": JUDGE_MAX_TOKENS,
         "system": JUDGE_SYSTEM_PROMPT,
@@ -320,9 +372,7 @@ def call_judge(
             resp = client.post(ANTHROPIC_URL, headers=headers, json=payload)
             if resp.status_code in (429, 500, 502, 503, 529):
                 raise httpx.HTTPStatusError(
-                    f"retryable status {resp.status_code}",
-                    request=resp.request,
-                    response=resp,
+                    f"retryable status {resp.status_code}", request=resp.request, response=resp
                 )
             if 400 <= resp.status_code < 500:
                 # Permanent client error — do NOT retry; surface the API's reason.
@@ -332,9 +382,16 @@ def call_judge(
             text = "".join(
                 b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"
             )
-            return extract_json(text), data.get("usage", {}), text
-        except (httpx.HTTPError, json.JSONDecodeError) as e:
+            parsed = extract_json(text)
+            if validate is not None:
+                problems = validate(parsed)
+                if problems:
+                    raise SchemaError("; ".join(problems))
+            return parsed, data.get("usage", {}), text
+        except (httpx.HTTPError, json.JSONDecodeError, SchemaError) as e:
             last_err = e
+            if isinstance(e, SchemaError):
+                print(f"  [retry] judge schema violation (attempt {attempt}): {e}", file=sys.stderr)
             if attempt < MAX_RETRIES:
                 time.sleep(min(2 ** attempt, 16))
     raise RuntimeError(f"judge call failed after {MAX_RETRIES} attempts: {last_err}")
@@ -373,6 +430,7 @@ def score_pairwise(
 
     per_probe: list[dict[str, Any]] = []
     usage_total: dict[str, int] = {}
+    validate = make_validator(axis_keys, "pairwise")
     # Tallies are model-relative (model_a / model_b / tie / order_sensitive).
     axis_tally = {k: {"model_a": 0, "model_b": 0, "tie": 0, "order_sensitive": 0} for k in axis_keys}
     overall_tally = {"model_a": 0, "model_b": 0, "tie": 0, "order_sensitive": 0}
@@ -391,9 +449,9 @@ def score_pairwise(
             print(f"\n===== probe {rid} :: ORDER 2 (A=model_b) =====\n{p2}")
             continue
 
-        j1, u1, raw1 = call_judge(client, api_key, judge_model, p1)
+        j1, u1, raw1 = call_judge(client, api_key, judge_model, p1, validate=validate)
         acc_usage(usage_total, u1)
-        j2, u2, raw2 = call_judge(client, api_key, judge_model, p2)
+        j2, u2, raw2 = call_judge(client, api_key, judge_model, p2, validate=validate)
         acc_usage(usage_total, u2)
 
         axes_result: dict[str, Any] = {}
@@ -468,6 +526,7 @@ def score_pointwise(client, api_key, judge_model, cap, rubric, reference_prompt,
     usage_total: dict[str, int] = {}
     sums = {k: 0.0 for k in axis_keys}
     overall_sum = 0.0
+    validate = make_validator(axis_keys, "pointwise")
 
     for r in records:
         rid = r.get("id")
@@ -477,7 +536,7 @@ def score_pointwise(client, api_key, judge_model, cap, rubric, reference_prompt,
         if dry_run:
             print(f"\n===== probe {rid} =====\n{prompt}")
             continue
-        j, u, raw = call_judge(client, api_key, judge_model, prompt)
+        j, u, raw = call_judge(client, api_key, judge_model, prompt, validate=validate)
         acc_usage(usage_total, u)
         axes = {}
         for k in axis_keys:
