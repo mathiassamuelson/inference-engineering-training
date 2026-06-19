@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "tool": "worker_contract_check.py",
+  "timestamp_utc": "20260619T195357Z",
+  "capture_path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_payment-service_gemma-4-12B-it.json",
+  "model": "google/gemma-4-12B-it",
+  "expected_component": "payment-service",
+  "capture_provenance": {
+    "model": "google/gemma-4-12B-it",
+    "git_sha": "e9f71fb57a04743df90014cfefc0f7550842b835",
+    "git_dirty": false,
+    "system_prompt_sha256": "0bc3bfe18866b47b53d6826689d3ec8ebe8fd2ea9c3c98a05894016776743296",
+    "schema_version": 2,
+    "timestamp_utc": "20260619T195242Z"
+  },
+  "tool_git_sha": "e9f71fb57a04743df90014cfefc0f7550842b835",
+  "tool_git_dirty": true,
+  "summary": {
+    "probes": 6,
+    "strict_json": 6,
+    "parseable": 6,
+    "schema_valid": 6,
+    "strict_conformant": 6,
+    "truncated": 0,
+    "conformance_rate": 1.0,
+    "strict_json_rate": 1.0
+  },
+  "per_probe": [
+    {
+      "id": "p1_pool_saturation_logs",
+      "title": "PSP pool saturation from logs (clean high-confidence extraction)",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    },
+    {
+      "id": "p2_decline_vs_error_sql",
+      "title": "Decline-vs-error discrimination from a charges query",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    },
+    {
+      "id": "p3_credential_auth_failure",
+      "title": "Credential / auth failure pattern (uniform, not latency)",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    },
+    {
+      "id": "p4_scope_discipline_foreign_signals",
+      "title": "Scope trap: payment-service clean, foreign Redis/inventory signals present",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    },
+    {
+      "id": "p5_nominal_with_decline",
+      "title": "Nominal payment-service with a benign decline (do not fabricate a finding)",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    },
+    {
+      "id": "p6_pool_exhaustion_metrics",
+      "title": "Pool exhaustion from metric series (time-series extraction, no logs)",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    }
+  ]
+}
