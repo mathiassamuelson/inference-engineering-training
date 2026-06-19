@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "tool": "rca_quality_judge.py",
+  "mode": "pairwise",
+  "timestamp_utc": "20260619T195655Z",
+  "judge_model": "claude-opus-4-8",
+  "judge_temperature": null,
+  "judge_max_tokens": 1500,
+  "position_bias_control": "both-orders",
+  "rubric": [
+    {
+      "key": "extraction_fidelity",
+      "definition": "Does the response surface the in-scope signals actually present in the provided evidence, each backed by VERBATIM evidence (exact log lines, metric points, or rows) copied from the task rather than paraphrased or invented? Reward faithful, complete extraction tied to real evidence. Penalize missed signals that the evidence clearly contains, paraphrased or fabricated evidence strings, and claims the provided data does not support."
+    },
+    {
+      "key": "scope_discipline",
+      "definition": "Judged against the reference worker system prompt: does the response stay strictly within the worker's assigned component? A cross-component signal must be flagged tersely as an out-of-scope observation WITHOUT being diagnosed and WITHOUT being promoted into an in-scope finding; a component that is clearly nominal must yield no invented findings. Reward correct routing of foreign signals and restraint when the component is clean. Penalize diagnosing other components, claiming another component's symptoms as the worker's own, fabricating findings to appear useful, and silently dropping a clear cross-component signal."
+    },
+    {
+      "key": "signal_correctness",
+      "definition": "Are the surfaced signals correctly identified and classified, with confidence calibrated to the evidence? Reward correct mechanism identification, correct application of distinctions the component's domain demands (e.g. an infrastructure error vs a business outcome, or an outbound-dependency cause vs an internal one), and confidence proportional to evidential strength. Penalize misidentification, conflating distinct failure classes, and confidence that is over- or under-stated relative to the evidence."
+    }
+  ],
+  "reference_prompt_used": true,
+  "tool_git_sha": "751917d8057dc8b97d06b36a3b0f5f958a5b03d7",
+  "tool_git_dirty": false,
+  "inputs": {
+    "a": {
+      "path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_payment-service_gemma-4-12B-it-qat-w4a16-ct.json",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "git_sha": "04c74db4fdc5e368221d4252028771eace41ee23",
+      "git_dirty": false,
+      "system_prompt_sha256": "0bc3bfe18866b47b53d6826689d3ec8ebe8fd2ea9c3c98a05894016776743296",
+      "schema_version": 2,
+      "timestamp_utc": "20260619T194938Z"
+    },
+    "b": {
+      "path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_payment-service_gemma-4-12B-it.json",
+      "model": "google/gemma-4-12B-it",
+      "git_sha": "e9f71fb57a04743df90014cfefc0f7550842b835",
+      "git_dirty": false,
+      "system_prompt_sha256": "0bc3bfe18866b47b53d6826689d3ec8ebe8fd2ea9c3c98a05894016776743296",
+      "schema_version": 2,
+      "timestamp_utc": "20260619T195242Z"
+    }
+  },
+  "summary": {
+    "probes_scored": 6,
+    "axis_tally": {
+      "extraction_fidelity": {
+        "model_a": 0,
+        "model_b": 0,
+        "tie": 6,
+        "order_sensitive": 1
+      },
+      "scope_discipline": {
+        "model_a": 0,
+        "model_b": 0,
+        "tie": 6,
+        "order_sensitive": 1
+      },
+      "signal_correctness": {
+        "model_a": 0,
+        "model_b": 1,
+        "tie": 5,
+        "order_sensitive": 2
+      }
+    },
+    "overall_tally": {
+      "model_a": 0,
+      "model_b": 1,
+      "tie": 5,
+      "order_sensitive": 3
+    },
+    "usage": {
+      "input_tokens": 58284,
+      "output_tokens": 4609,
+      "judge_calls": 12
+    }
+  },
+  "per_probe": [
+    {
+      "id": "p1_pool_saturation_logs",
+      "title": "PSP pool saturation from logs (clean high-confidence extraction)",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both surface the same three signals with identical verbatim evidence lines copied exactly from the logs. No misses, no fabrication in either.",
+          "order2_rationale": "Both extract the same verbatim lines: pool 50/50 with waiters, two pool_acquire_timeout errors, and upstream_ms=2780. Identical evidence fidelity with exact copies."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both treat the upstream_ms latency as payment-service's own pool-fill mechanism rather than attributing it to PSP as out-of-scope. Equivalent handling and empty observations.",
+          "order2_rationale": "Both correctly attribute pool exhaustion to payment-service while noting PSP latency as the upstream driver, neither overstepping into diagnosing the external PSP. No cross-component signal mishandled."
+        },
+        "signal_correctness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly identify pool exhaustion, acquisition timeouts, and high upstream latency as the unified latency-burst mechanism, with calibrated high confidence. Substantively identical classifications.",
+          "order2_rationale": "Both identify the latency-burst-driven pool exhaustion mechanism correctly with high confidence, appropriate given explicit pool_acquire_timeout lines and 50/50 occupancy. Classification and calibration are equivalent."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": false,
+        "order1_winner": "tie",
+        "order2_winner": "tie",
+        "order1_confidence": "high",
+        "order2_confidence": "high",
+        "order1_rationale": "The two responses are substantively identical in extracted signals, verbatim evidence, classification, confidence, and summary. Differences are purely cosmetic phrasing, which the rubric instructs to ignore.",
+        "order2_rationale": "Responses are substantively identical: same three findings, same verbatim evidence, same high confidence, same empty out_of_scope, near-identical summaries. Only trivial phrasing differs, which is explicitly ignored."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both surface the same three signals with identical verbatim evidence lines copied exactly from the logs. No misses, no fabrication in either.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both treat the upstream_ms latency as payment-service's own pool-fill mechanism rather than attributing it to PSP as out-of-scope. Equivalent handling and empty observations.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify pool exhaustion, acquisition timeouts, and high upstream latency as the unified latency-burst mechanism, with calibrated high confidence. Substantively identical classifications.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"The two responses are substantively identical in extracted signals, verbatim evidence, classification, confidence, and summary. Differences are purely cosmetic phrasing, which the rubric instructs to ignore.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both extract the same verbatim lines: pool 50/50 with waiters, two pool_acquire_timeout errors, and upstream_ms=2780. Identical evidence fidelity with exact copies.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both correctly attribute pool exhaustion to payment-service while noting PSP latency as the upstream driver, neither overstepping into diagnosing the external PSP. No cross-component signal mishandled.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both identify the latency-burst-driven pool exhaustion mechanism correctly with high confidence, appropriate given explicit pool_acquire_timeout lines and 50/50 occupancy. Classification and calibration are equivalent.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses are substantively identical: same three findings, same verbatim evidence, same high confidence, same empty out_of_scope, near-identical summaries. Only trivial phrasing differs, which is explicitly ignored.\"}\n}"
+      }
+    },
+    {
+      "id": "p2_decline_vs_error_sql",
+      "title": "Decline-vs-error discrimination from a charges query",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "tie",
+          "order2_winner": "model_a",
+          "order1_rationale": "Both surface only the ERRORED pool_acquire_timeout row with identical verbatim evidence. Both omit explicit verbatim handling of declines, though A mentions them in summary. Substantively equivalent extraction of the single in-scope signal.",
+          "order2_rationale": "Both surface the ERRORED pool_acquire_timeout row verbatim. B additionally acknowledges the DECLINED rows exist while correctly excluding them, demonstrating the decline-vs-error distinction in its handoff summary."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly keep declines out of findings and add no out-of-scope observations (none needed; declines are a business signal, not cross-component). Neither oversteps. Equivalent restraint.",
+          "order2_rationale": "Both stay within payment-service, correctly leave out_of_scope_observations empty, and avoid diagnosing other components. Neither overreaches; the PSP-internal cause is implied but kept to the pool symptom."
+        },
+        "signal_correctness": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "tie",
+          "order2_winner": "model_a",
+          "order1_rationale": "Both correctly classify pool_acquire_timeout as an infra ERRORED finding at high confidence, mechanism (pool exhaustion) identified, and exclude DECLINED business outcomes. Equivalent and correct classification.",
+          "order2_rationale": "Both correctly classify the ERRORED row as infra at high confidence. B explicitly distinguishes the DECLINED surge as business-not-infra, applying the load-bearing decline-vs-error rule, calibrating against decline noise."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": true,
+        "order1_winner": "tie",
+        "order2_winner": "model_a",
+        "order1_confidence": "high",
+        "order2_confidence": "medium",
+        "order1_rationale": "Responses are substantively identical: same finding, same verbatim evidence, same high confidence, same correct exclusion of declines. A's summary explicitly notes declines aren't infra, a trivial edge that doesn't change substance.",
+        "order2_rationale": "Substantively near-identical findings, but B's summary correctly applies the decline-vs-error distinction, signaling it did not bury or misclassify the large DECLINED counts as infra, which is exactly the demanded domain discipline."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both surface only the ERRORED pool_acquire_timeout row with identical verbatim evidence. Both omit explicit verbatim handling of declines, though A mentions them in summary. Substantively equivalent extraction of the single in-scope signal.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both correctly keep declines out of findings and add no out-of-scope observations (none needed; declines are a business signal, not cross-component). Neither oversteps. Equivalent restraint.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify pool_acquire_timeout as an infra ERRORED finding at high confidence, mechanism (pool exhaustion) identified, and exclude DECLINED business outcomes. Equivalent and correct classification.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses are substantively identical: same finding, same verbatim evidence, same high confidence, same correct exclusion of declines. A's summary explicitly notes declines aren't infra, a trivial edge that doesn't change substance.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"B\", \"rationale\": \"Both surface the ERRORED pool_acquire_timeout row verbatim. B additionally acknowledges the DECLINED rows exist while correctly excluding them, demonstrating the decline-vs-error distinction in its handoff summary.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both stay within payment-service, correctly leave out_of_scope_observations empty, and avoid diagnosing other components. Neither overreaches; the PSP-internal cause is implied but kept to the pool symptom.\"},\n    \"signal_correctness\": {\"winner\": \"B\", \"rationale\": \"Both correctly classify the ERRORED row as infra at high confidence. B explicitly distinguishes the DECLINED surge as business-not-infra, applying the load-bearing decline-vs-error rule, calibrating against decline noise.\"}\n  },\n  \"overall\": {\"winner\": \"B\", \"confidence\": \"medium\", \"rationale\": \"Substantively near-identical findings, but B's summary correctly applies the decline-vs-error distinction, signaling it did not bury or misclassify the large DECLINED counts as infra, which is exactly the demanded domain discipline.\"}\n}"
+      }
+    },
+    {
+      "id": "p3_credential_auth_failure",
+      "title": "Credential / auth failure pattern (uniform, not latency)",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both copy all four verbatim 401 log lines identically. Neither includes the pool/waiters line verbatim, but both surface the auth signal completely.",
+          "order2_rationale": "Both copy all four verbatim 401 log lines exactly. Neither cites the pool line, but both correctly characterize healthy pool/low latency. Equivalent extraction."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both stay strictly in payment-service, neither diagnoses the PSP itself or other components, and both correctly leave out_of_scope_observations empty.",
+          "order2_rationale": "Both stay strictly in payment-service, diagnose only the PSP auth failure as payment-service's own signal, and correctly report no out-of-scope observations. No overreach in either."
+        },
+        "signal_correctness": {
+          "consensus": "model_b",
+          "order_sensitive": false,
+          "order1_winner": "model_b",
+          "order2_winner": "model_b",
+          "order1_rationale": "Both correctly identify credential/auth failure. B's summary explicitly notes low latency and healthy pool occupancy, the key discriminators distinguishing auth failure from a latency/pool-exhaustion burst, matching the domain rule.",
+          "order2_rationale": "Both correctly classify uniform immediate auth failure with high confidence. A explicitly notes low latency and healthy pool, the distinguishing markers separating auth failure from latency burst; B omits these confirming details."
+        }
+      },
+      "overall": {
+        "consensus": "model_b",
+        "order_sensitive": false,
+        "order1_winner": "model_b",
+        "order2_winner": "model_b",
+        "order1_confidence": "low",
+        "order2_confidence": "low",
+        "order1_rationale": "Near-identical. B edges ahead by explicitly noting the low-latency, healthy-pool discriminators that confirm credential failure over a latency burst, demonstrating stronger application of the domain distinction.",
+        "order2_rationale": "Substantively near-identical, correct credential-failure classifications. A's summary adds the low-latency/healthy-pool distinction that rules out a latency burst, slightly better calibrating the diagnosis. Marginal edge."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both copy all four verbatim 401 log lines identically. Neither includes the pool/waiters line verbatim, but both surface the auth signal completely.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both stay strictly in payment-service, neither diagnoses the PSP itself or other components, and both correctly leave out_of_scope_observations empty.\"},\n    \"signal_correctness\": {\"winner\": \"B\", \"rationale\": \"Both correctly identify credential/auth failure. B's summary explicitly notes low latency and healthy pool occupancy, the key discriminators distinguishing auth failure from a latency/pool-exhaustion burst, matching the domain rule.\"}\n  },\n  \"overall\": {\"winner\": \"B\", \"confidence\": \"low\", \"rationale\": \"Near-identical. B edges ahead by explicitly noting the low-latency, healthy-pool discriminators that confirm credential failure over a latency burst, demonstrating stronger application of the domain distinction.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both copy all four verbatim 401 log lines exactly. Neither cites the pool line, but both correctly characterize healthy pool/low latency. Equivalent extraction.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both stay strictly in payment-service, diagnose only the PSP auth failure as payment-service's own signal, and correctly report no out-of-scope observations. No overreach in either.\"},\n    \"signal_correctness\": {\"winner\": \"A\", \"rationale\": \"Both correctly classify uniform immediate auth failure with high confidence. A explicitly notes low latency and healthy pool, the distinguishing markers separating auth failure from latency burst; B omits these confirming details.\"}\n  },\n  \"overall\": {\"winner\": \"A\", \"confidence\": \"low\", \"rationale\": \"Substantively near-identical, correct credential-failure classifications. A's summary adds the low-latency/healthy-pool distinction that rules out a latency burst, slightly better calibrating the diagnosis. Marginal edge.\"}\n}"
+      }
+    },
+    {
+      "id": "p4_scope_discipline_foreign_signals",
+      "title": "Scope trap: payment-service clean, foreign Redis/inventory signals present",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly identify payment-service as nominal with empty findings. Neither fabricates findings. Both reference the same out-of-scope signals; both are terse pointers, neither quoting fully verbatim metric points.",
+          "order2_rationale": "Both correctly find payment-service nominal with empty findings. Neither fabricates evidence. The healthy pool/latency logs support the nominal conclusion equally well."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "model_b",
+          "order2_winner": "tie",
+          "order1_rationale": "Both restrain from diagnosing other components. B's pointers add the 14:35 timestamp, giving the orchestrator more precise routing while still avoiding diagnosis. A's are barely labeled. Both correct; B marginally more useful pointers.",
+          "order2_rationale": "Both correctly route redis and inventory-service signals to out_of_scope_observations without diagnosing them, and avoid manufacturing findings. A adds timestamps; both remain terse pointers without diagnosis."
+        },
+        "signal_correctness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly classify payment-service as healthy, no false findings, and route Redis/inventory signals out of scope without diagnosis. Equivalent in substance and calibration.",
+          "order2_rationale": "Both correctly classify payment-service as healthy and decline to claim foreign latency as their own. Confidence (empty findings) is appropriately calibrated to clean evidence in both."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": true,
+        "order1_winner": "model_b",
+        "order2_winner": "tie",
+        "order1_confidence": "low",
+        "order2_confidence": "high",
+        "order1_rationale": "Substantively equivalent: both correctly mark payment-service nominal and route the two foreign signals out of scope. B's out-of-scope pointers include the 14:35 timestamp, marginally aiding orchestrator routing without overstepping.",
+        "order2_rationale": "Responses are substantively identical: nominal payment-service, empty findings, both cross-component signals flagged tersely without diagnosis. A's added timestamps are cosmetic and not rewarded over phrasing differences."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify payment-service as nominal with empty findings. Neither fabricates findings. Both reference the same out-of-scope signals; both are terse pointers, neither quoting fully verbatim metric points.\"},\n    \"scope_discipline\": {\"winner\": \"B\", \"rationale\": \"Both restrain from diagnosing other components. B's pointers add the 14:35 timestamp, giving the orchestrator more precise routing while still avoiding diagnosis. A's are barely labeled. Both correct; B marginally more useful pointers.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify payment-service as healthy, no false findings, and route Redis/inventory signals out of scope without diagnosis. Equivalent in substance and calibration.\"}\n  },\n  \"overall\": {\"winner\": \"B\", \"confidence\": \"low\", \"rationale\": \"Substantively equivalent: both correctly mark payment-service nominal and route the two foreign signals out of scope. B's out-of-scope pointers include the 14:35 timestamp, marginally aiding orchestrator routing without overstepping.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both correctly find payment-service nominal with empty findings. Neither fabricates evidence. The healthy pool/latency logs support the nominal conclusion equally well.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both correctly route redis and inventory-service signals to out_of_scope_observations without diagnosing them, and avoid manufacturing findings. A adds timestamps; both remain terse pointers without diagnosis.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify payment-service as healthy and decline to claim foreign latency as their own. Confidence (empty findings) is appropriately calibrated to clean evidence in both.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses are substantively identical: nominal payment-service, empty findings, both cross-component signals flagged tersely without diagnosis. A's added timestamps are cosmetic and not rewarded over phrasing differences.\"}\n}"
+      }
+    },
+    {
+      "id": "p5_nominal_with_decline",
+      "title": "Nominal payment-service with a benign decline (do not fabricate a finding)",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly emit empty findings for nominal data. Neither quotes evidence, which is fine since nominal requires none. B mentions PSP latency in summary, which is accurate but adds no verbatim backing.",
+          "order2_rationale": "Both correctly emit empty findings with no fabricated evidence. Neither needed verbatim quotes since the component is nominal. Equivalent fidelity."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both stay in scope, manufacture no findings, and correctly report nominal with no out_of_scope observations. No cross-component signals exist to route.",
+          "order2_rationale": "Both stay in lane, invent no findings, and route nothing out of scope. The decline line is a business signal correctly omitted by both. Equivalent restraint."
+        },
+        "signal_correctness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly classify the component as healthy. The decline line is a business outcome, correctly not treated as a finding. B's summary slightly more complete by noting normal latencies, but substance is equal.",
+          "order2_rationale": "Both correctly classify payment-service as nominal: pool well below 50, error_rate flat, PSP latencies near steady-state ~120ms. Neither conflates the decline as infra. Equivalent."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": false,
+        "order1_winner": "tie",
+        "order2_winner": "tie",
+        "order1_confidence": "high",
+        "order2_confidence": "high",
+        "order1_rationale": "Both reach the identical correct conclusion: payment-service is nominal with empty findings. B's summary adds a minor accurate detail about PSP latencies but this is cosmetic, not substantive.",
+        "order2_rationale": "Substantively identical: both correctly conclude nominal with empty findings and no out-of-scope observations. Summaries differ trivially in phrasing only, which the rubric instructs to ignore."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both correctly emit empty findings for nominal data. Neither quotes evidence, which is fine since nominal requires none. B mentions PSP latency in summary, which is accurate but adds no verbatim backing.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both stay in scope, manufacture no findings, and correctly report nominal with no out_of_scope observations. No cross-component signals exist to route.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify the component as healthy. The decline line is a business outcome, correctly not treated as a finding. B's summary slightly more complete by noting normal latencies, but substance is equal.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Both reach the identical correct conclusion: payment-service is nominal with empty findings. B's summary adds a minor accurate detail about PSP latencies but this is cosmetic, not substantive.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both correctly emit empty findings with no fabricated evidence. Neither needed verbatim quotes since the component is nominal. Equivalent fidelity.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both stay in lane, invent no findings, and route nothing out of scope. The decline line is a business signal correctly omitted by both. Equivalent restraint.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify payment-service as nominal: pool well below 50, error_rate flat, PSP latencies near steady-state ~120ms. Neither conflates the decline as infra. Equivalent.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Substantively identical: both correctly conclude nominal with empty findings and no out-of-scope observations. Summaries differ trivially in phrasing only, which the rubric instructs to ignore.\"}\n}"
+      }
+    },
+    {
+      "id": "p6_pool_exhaustion_metrics",
+      "title": "Pool exhaustion from metric series (time-series extraction, no logs)",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both copy identical verbatim metric points covering pool pinning, rising waiters, and p99 climb. Neither invents or paraphrases evidence; extraction is equivalent.",
+          "order2_rationale": "Both surface identical verbatim metric points for pool exhaustion, waiters, and p99 latency. Neither fabricates evidence. Both omit the early pool ramp but capture the core signals equally."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both stay within payment-service, avoid diagnosing the PSP or order-service, and correctly leave out_of_scope_observations empty. No overstep or miss in either.",
+          "order2_rationale": "Both stay within payment-service, correctly diagnose PSP pool/latency, and leave out_of_scope empty. Neither overreaches into order-service or PSP-itself diagnosis. Equivalent restraint."
+        },
+        "signal_correctness": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "model_b",
+          "order2_winner": "tie",
+          "order1_rationale": "B's 'PSP latency burst' framing matches the domain mechanism (latency burst fills pool) better than A's bare 'latency hitting ceiling'. Both correctly classify pool exhaustion; confidence appropriately high.",
+          "order2_rationale": "Both correctly identify pool exhaustion with rising waiters and latency pinned at the 3s ceiling, with appropriately high confidence given direct unambiguous evidence. Mechanisms equivalent."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": true,
+        "order1_winner": "model_b",
+        "order2_winner": "tie",
+        "order1_confidence": "low",
+        "order2_confidence": "high",
+        "order1_rationale": "Substantively near-identical. B's mechanism naming ('latency burst') aligns marginally better with the component's diagnostic vocabulary, giving it a slight edge in signal correctness.",
+        "order2_rationale": "Responses are substantively identical: same findings, same verbatim evidence, same confidence, same empty out-of-scope, near-identical summaries. No operational difference distinguishes them."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both copy identical verbatim metric points covering pool pinning, rising waiters, and p99 climb. Neither invents or paraphrases evidence; extraction is equivalent.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both stay within payment-service, avoid diagnosing the PSP or order-service, and correctly leave out_of_scope_observations empty. No overstep or miss in either.\"},\n    \"signal_correctness\": {\"winner\": \"B\", \"rationale\": \"B's 'PSP latency burst' framing matches the domain mechanism (latency burst fills pool) better than A's bare 'latency hitting ceiling'. Both correctly classify pool exhaustion; confidence appropriately high.\"}\n  },\n  \"overall\": {\"winner\": \"B\", \"confidence\": \"low\", \"rationale\": \"Substantively near-identical. B's mechanism naming ('latency burst') aligns marginally better with the component's diagnostic vocabulary, giving it a slight edge in signal correctness.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both surface identical verbatim metric points for pool exhaustion, waiters, and p99 latency. Neither fabricates evidence. Both omit the early pool ramp but capture the core signals equally.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both stay within payment-service, correctly diagnose PSP pool/latency, and leave out_of_scope empty. Neither overreaches into order-service or PSP-itself diagnosis. Equivalent restraint.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify pool exhaustion with rising waiters and latency pinned at the 3s ceiling, with appropriately high confidence given direct unambiguous evidence. Mechanisms equivalent.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses are substantively identical: same findings, same verbatim evidence, same confidence, same empty out-of-scope, near-identical summaries. No operational difference distinguishes them.\"}\n}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "tool": "rca_quality_judge.py",
+  "mode": "pointwise",
+  "timestamp_utc": "20260619T195845Z",
+  "judge_model": "claude-opus-4-8",
+  "judge_temperature": null,
+  "judge_max_tokens": 1500,
+  "position_bias_control": "n/a",
+  "rubric": [
+    {
+      "key": "extraction_fidelity",
+      "definition": "Does the response surface the in-scope signals actually present in the provided evidence, each backed by VERBATIM evidence (exact log lines, metric points, or rows) copied from the task rather than paraphrased or invented? Reward faithful, complete extraction tied to real evidence. Penalize missed signals that the evidence clearly contains, paraphrased or fabricated evidence strings, and claims the provided data does not support."
+    },
+    {
+      "key": "scope_discipline",
+      "definition": "Judged against the reference worker system prompt: does the response stay strictly within the worker's assigned component? A cross-component signal must be flagged tersely as an out-of-scope observation WITHOUT being diagnosed and WITHOUT being promoted into an in-scope finding; a component that is clearly nominal must yield no invented findings. Reward correct routing of foreign signals and restraint when the component is clean. Penalize diagnosing other components, claiming another component's symptoms as the worker's own, fabricating findings to appear useful, and silently dropping a clear cross-component signal."
+    },
+    {
+      "key": "signal_correctness",
+      "definition": "Are the surfaced signals correctly identified and classified, with confidence calibrated to the evidence? Reward correct mechanism identification, correct application of distinctions the component's domain demands (e.g. an infrastructure error vs a business outcome, or an outbound-dependency cause vs an internal one), and confidence proportional to evidential strength. Penalize misidentification, conflating distinct failure classes, and confidence that is over- or under-stated relative to the evidence."
+    }
+  ],
+  "reference_prompt_used": true,
+  "tool_git_sha": "751917d8057dc8b97d06b36a3b0f5f958a5b03d7",
+  "tool_git_dirty": true,
+  "inputs": {
+    "a": {
+      "path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_payment-service_gemma-4-12B-it.json",
+      "model": "google/gemma-4-12B-it",
+      "git_sha": "e9f71fb57a04743df90014cfefc0f7550842b835",
+      "git_dirty": false,
+      "system_prompt_sha256": "0bc3bfe18866b47b53d6826689d3ec8ebe8fd2ea9c3c98a05894016776743296",
+      "schema_version": 2,
+      "timestamp_utc": "20260619T195242Z"
+    }
+  },
+  "summary": {
+    "probes_scored": 6,
+    "axis_means": {
+      "extraction_fidelity": 4.667,
+      "scope_discipline": 5.0,
+      "signal_correctness": 4.5
+    },
+    "overall_mean": 4.833,
+    "usage": {
+      "input_tokens": 27340,
+      "output_tokens": 2404,
+      "judge_calls": 6
+    }
+  },
+  "per_probe": [
+    {
+      "id": "p1_pool_saturation_logs",
+      "title": "PSP pool saturation from logs (clean high-confidence extraction)",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 5,
+          "rationale": "All relevant signals surfaced (pool 50/50 with waiters, two pool_acquire_timeout failures, high upstream_ms) with exact verbatim log lines copied from the evidence. Nothing missed or fabricated."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "Stays strictly within payment-service. No cross-component diagnosis; no order-service latency claimed. PSP latency framed as the worker's own metric (upstream_ms is in payment-service logs), correctly kept in scope."
+        },
+        "signal_correctness": {
+          "score": 4,
+          "rationale": "Correctly identifies pool exhaustion, acquire timeouts, and the underlying PSP latency burst mechanism. Slight over-confidence on 'high upstream latency' from a single 2780ms point, but coherent with the latency-burst signature."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Faithful, in-scope extraction with verbatim evidence and correct mechanism (latency-driven pool exhaustion). Minor quibble on calling a single upstream_ms point 'high' confidence, but the unified picture is accurate and well-routed."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 5, \"rationale\": \"All relevant signals surfaced (pool 50/50 with waiters, two pool_acquire_timeout failures, high upstream_ms) with exact verbatim log lines copied from the evidence. Nothing missed or fabricated.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"Stays strictly within payment-service. No cross-component diagnosis; no order-service latency claimed. PSP latency framed as the worker's own metric (upstream_ms is in payment-service logs), correctly kept in scope.\"},\n    \"signal_correctness\": {\"score\": 4, \"rationale\": \"Correctly identifies pool exhaustion, acquire timeouts, and the underlying PSP latency burst mechanism. Slight over-confidence on 'high upstream latency' from a single 2780ms point, but coherent with the latency-burst signature.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"Faithful, in-scope extraction with verbatim evidence and correct mechanism (latency-driven pool exhaustion). Minor quibble on calling a single upstream_ms point 'high' confidence, but the unified picture is accurate and well-routed.\"}\n}"
+    },
+    {
+      "id": "p2_decline_vs_error_sql",
+      "title": "Decline-vs-error discrimination from a charges query",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 4,
+          "rationale": "Correctly extracts the ERRORED row verbatim. Properly excludes DECLINED rows as business signals. Minor: could note the verbatim row exactly matches source spacing, which it does."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "Stays strictly in payment-service. Correctly avoids diagnosing the PSP itself or treating declines as infra. No invented findings, no out-of-scope overreach. Clean and restrained."
+        },
+        "signal_correctness": {
+          "score": 3,
+          "rationale": "Correctly classifies ERRORED/pool_acquire_timeout as infra. But 'high' confidence is overstated: a single count row lacks pool_in_use=50/50 and waiters corroboration. Should be medium per confidence semantics."
+        }
+      },
+      "overall": {
+        "score": 4,
+        "rationale": "Solid extraction with correct decline-vs-error discrimination and good scope restraint. Main weakness is over-confident classification (high vs medium) since the SQL row alone, without pool metrics, only suggests rather than confirms pool exhaustion mechanism."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 4, \"rationale\": \"Correctly extracts the ERRORED row verbatim. Properly excludes DECLINED rows as business signals. Minor: could note the verbatim row exactly matches source spacing, which it does.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"Stays strictly in payment-service. Correctly avoids diagnosing the PSP itself or treating declines as infra. No invented findings, no out-of-scope overreach. Clean and restrained.\"},\n    \"signal_correctness\": {\"score\": 3, \"rationale\": \"Correctly classifies ERRORED/pool_acquire_timeout as infra. But 'high' confidence is overstated: a single count row lacks pool_in_use=50/50 and waiters corroboration. Should be medium per confidence semantics.\"}\n  },\n  \"overall\": {\"score\": 4, \"rationale\": \"Solid extraction with correct decline-vs-error discrimination and good scope restraint. Main weakness is over-confident classification (high vs medium) since the SQL row alone, without pool metrics, only suggests rather than confirms pool exhaustion mechanism.\"}\n}"
+    },
+    {
+      "id": "p3_credential_auth_failure",
+      "title": "Credential / auth failure pattern (uniform, not latency)",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 5,
+          "rationale": "All four log lines copied verbatim. Pool metric noted in summary. Complete extraction of the in-scope auth signal with exact evidence strings."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "Stays entirely within payment-service. No cross-component diagnosis, no invented findings, correctly no out_of_scope items since the auth failure is payment-service's own PSP wrapper concern."
+        },
+        "signal_correctness": {
+          "score": 5,
+          "rationale": "Correctly identifies credential/auth failure (uniform 401, low upstream_ms, healthy pool 6/50), matching the durable-knowledge signature. High confidence is well-calibrated to unambiguous evidence."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Accurate classification of credential/auth failure with verbatim evidence, proper confidence, and clean scope adherence. Minor nit: pool metric could be included in evidence array, but summary captures it."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 5, \"rationale\": \"All four log lines copied verbatim. Pool metric noted in summary. Complete extraction of the in-scope auth signal with exact evidence strings.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"Stays entirely within payment-service. No cross-component diagnosis, no invented findings, correctly no out_of_scope items since the auth failure is payment-service's own PSP wrapper concern.\"},\n    \"signal_correctness\": {\"score\": 5, \"rationale\": \"Correctly identifies credential/auth failure (uniform 401, low upstream_ms, healthy pool 6/50), matching the durable-knowledge signature. High confidence is well-calibrated to unambiguous evidence.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"Accurate classification of credential/auth failure with verbatim evidence, proper confidence, and clean scope adherence. Minor nit: pool metric could be included in evidence array, but summary captures it.\"}\n}"
+    },
+    {
+      "id": "p4_scope_discipline_foreign_signals",
+      "title": "Scope trap: payment-service clean, foreign Redis/inventory signals present",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 5,
+          "rationale": "Correctly identifies payment-service as nominal: pool 9/50, upstream_ms=121 healthy, clean capture. No fabricated findings. Summary accurately reflects the benign payment logs without inventing problems."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "Both Redis and inventory-service spikes routed tersely to out_of_scope_observations without diagnosis. No cross-component symptom claimed as payment-service. Empty findings for clean component is correct restraint."
+        },
+        "signal_correctness": {
+          "score": 5,
+          "rationale": "Correctly classifies payment-service as healthy with no false signal. Recognizes foreign components are not payment-service's concern. No conflation of latency/decline/error classes; nominal call is well-calibrated."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Exemplary: correctly recognizes payment-service is nominal, surfaces no invented findings, and routes both foreign spikes to out_of_scope without diagnosing them. Clean adherence to contract and scope boundaries."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 5, \"rationale\": \"Correctly identifies payment-service as nominal: pool 9/50, upstream_ms=121 healthy, clean capture. No fabricated findings. Summary accurately reflects the benign payment logs without inventing problems.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"Both Redis and inventory-service spikes routed tersely to out_of_scope_observations without diagnosis. No cross-component symptom claimed as payment-service. Empty findings for clean component is correct restraint.\"},\n    \"signal_correctness\": {\"score\": 5, \"rationale\": \"Correctly classifies payment-service as healthy with no false signal. Recognizes foreign components are not payment-service's concern. No conflation of latency/decline/error classes; nominal call is well-calibrated.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"Exemplary: correctly recognizes payment-service is nominal, surfaces no invented findings, and routes both foreign spikes to out_of_scope without diagnosing them. Clean adherence to contract and scope boundaries.\"}\n}"
+    },
+    {
+      "id": "p5_nominal_with_decline",
+      "title": "Nominal payment-service with a benign decline (do not fabricate a finding)",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 5,
+          "rationale": "Correctly recognized the evidence shows a nominal component: pool 8-14 well below 50, error_rate ~0.002, upstream_ms ~120ms. No signals to fabricate, so empty findings is faithful. No invented evidence."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "Returns empty findings for a clean component, exactly as the prompt requires. No invented problems, no cross-component overreach. The decline line is a business outcome, correctly not promoted to a finding or flagged."
+        },
+        "signal_correctness": {
+          "score": 5,
+          "rationale": "Correctly classifies payment-service as nominal. Properly avoids treating the single insufficient_funds decline as an infra finding, respecting the decline-vs-error rule. Calibration appropriate to clean evidence."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "An exemplary nominal response: the evidence genuinely shows a healthy payment-service, and the assistant correctly returned empty findings with an accurate summary, avoiding manufactured problems and correctly ignoring the benign decline as a business outcome."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 5, \"rationale\": \"Correctly recognized the evidence shows a nominal component: pool 8-14 well below 50, error_rate ~0.002, upstream_ms ~120ms. No signals to fabricate, so empty findings is faithful. No invented evidence.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"Returns empty findings for a clean component, exactly as the prompt requires. No invented problems, no cross-component overreach. The decline line is a business outcome, correctly not promoted to a finding or flagged.\"},\n    \"signal_correctness\": {\"score\": 5, \"rationale\": \"Correctly classifies payment-service as nominal. Properly avoids treating the single insufficient_funds decline as an infra finding, respecting the decline-vs-error rule. Calibration appropriate to clean evidence.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"An exemplary nominal response: the evidence genuinely shows a healthy payment-service, and the assistant correctly returned empty findings with an accurate summary, avoiding manufactured problems and correctly ignoring the benign decline as a business outcome.\"}\n}"
+    },
+    {
+      "id": "p6_pool_exhaustion_metrics",
+      "title": "Pool exhaustion from metric series (time-series extraction, no logs)",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 4,
+          "rationale": "Evidence strings are verbatim metric points covering pool saturation, waiters, and p99. Captures all three signals. Minor: pool/waiters could include more of the rising ramp, but core data is faithfully extracted."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "Stays entirely within payment-service. Correctly avoids diagnosing the PSP itself as out-of-scope; the pool/timeout symptoms are payment-service-internal. No cross-component overstep, no invented findings, empty out_of_scope is appropriate."
+        },
+        "signal_correctness": {
+          "score": 5,
+          "rationale": "Correctly identifies pool exhaustion (50/50 pinned, rising waiters) and latency burst pinning p99 at 3s ceiling, matching the documented signature. High confidence is well-calibrated to unambiguous evidence."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Accurate, in-scope, well-classified extraction with verbatim evidence and calibrated confidence. The two signals match the durable knowledge's latency-burst/pool-exhaustion signature exactly. Slight room to surface more of the ramp data."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 4, \"rationale\": \"Evidence strings are verbatim metric points covering pool saturation, waiters, and p99. Captures all three signals. Minor: pool/waiters could include more of the rising ramp, but core data is faithfully extracted.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"Stays entirely within payment-service. Correctly avoids diagnosing the PSP itself as out-of-scope; the pool/timeout symptoms are payment-service-internal. No cross-component overstep, no invented findings, empty out_of_scope is appropriate.\"},\n    \"signal_correctness\": {\"score\": 5, \"rationale\": \"Correctly identifies pool exhaustion (50/50 pinned, rising waiters) and latency burst pinning p99 at 3s ceiling, matching the documented signature. High confidence is well-calibrated to unambiguous evidence.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"Accurate, in-scope, well-classified extraction with verbatim evidence and calibrated confidence. The two signals match the durable knowledge's latency-burst/pool-exhaustion signature exactly. Slight room to surface more of the ramp data.\"}\n}"
+    }
+  ]
+}
