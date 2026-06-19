@@ -99,11 +99,15 @@ charge records in the `payments` schema in Postgres.
 
 ---
 
-## 4. Output contract (STRICT — JSON only)
+## 4. Output contract (STRICT — raw JSON only)
 
-Return **exactly one JSON object** and nothing else: no prose, no markdown code fences, no reasoning
-trace, no leading or trailing text. The orchestrator parses your output directly — any character
-outside the JSON object breaks the handoff.
+Return **exactly one raw JSON object and nothing else.** Your response must begin with `{` and end
+with `}`. Do **NOT** wrap it in a markdown code fence (no ```` ``` ````, no `json` label), and add
+no prose, reasoning, or surrounding text. The orchestrator parses your output directly — any
+character outside the JSON object, including a code fence, breaks the handoff.
+
+The schema below is shown inside a code fence **for human readability only** — your actual output
+must be the raw object, unfenced.
 
 ```json
 {
@@ -131,3 +135,5 @@ outside the JSON object breaks the handoff.
 - each finding's `evidence` entries are **verbatim** copies from the provided evidence.
 - `out_of_scope_observations` is `[]` when there are none.
 - `summary` is always present — one line, even when `findings` is empty.
+
+Reminder: emit only the raw JSON object — first character `{`, last character `}`, no code fence.
