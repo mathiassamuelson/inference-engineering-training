@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "tool": "worker_contract_check.py",
+  "timestamp_utc": "20260620T232055Z",
+  "capture_path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_order-service_gemma-4-12B-it-qat-w4a16-ct.json",
+  "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+  "expected_component": "order-service",
+  "capture_provenance": {
+    "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+    "git_sha": "64acfb8820b003e5a918e5cae64df0d9f543f77f",
+    "git_dirty": false,
+    "system_prompt_sha256": "64b8ac4cc8f0b09dccbd7489c5b88cf73ef40c016004b5bcbc8b80a818737d03",
+    "schema_version": 2,
+    "timestamp_utc": "20260620T232033Z"
+  },
+  "tool_git_sha": "64acfb8820b003e5a918e5cae64df0d9f543f77f",
+  "tool_git_dirty": true,
+  "summary": {
+    "probes": 6,
+    "strict_json": 6,
+    "parseable": 6,
+    "schema_valid": 6,
+    "strict_conformant": 6,
+    "truncated": 0,
+    "conformance_rate": 1.0,
+    "strict_json_rate": 1.0
+  },
+  "per_probe": [
+    {
+      "id": "o1_internal_pool_slowquery",
+      "title": "Internal latency: DB pool contention from a slow query (in-lane)",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    },
+    {
+      "id": "o2_outbound_vs_internal_discriminator",
+      "title": "Outbound-vs-internal discriminator: order-service p99 tracking payment-service",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    },
+    {
+      "id": "o3_lifecycle_stall_sql",
+      "title": "Lifecycle stall: orders accumulating in PENDING_PAYMENT (orders query)",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    },
+    {
+      "id": "o4_scope_discipline_foreign_signals",
+      "title": "Scope trap: order-service clean, foreign Redis/inventory signals present",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    },
+    {
+      "id": "o5_nominal_with_cancellation",
+      "title": "Nominal order-service with a benign cancellation (do not fabricate a finding)",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    },
+    {
+      "id": "o6_internal_gc_pauses",
+      "title": "Internal latency: GC pauses correlated with p99, outbound normal",
+      "finish_reason": "stop",
+      "truncated": false,
+      "strict_json": true,
+      "parseable": true,
+      "needed_fence_strip": false,
+      "schema_problems": [],
+      "conformant": true,
+      "parse_error": null
+    }
+  ]
+}
