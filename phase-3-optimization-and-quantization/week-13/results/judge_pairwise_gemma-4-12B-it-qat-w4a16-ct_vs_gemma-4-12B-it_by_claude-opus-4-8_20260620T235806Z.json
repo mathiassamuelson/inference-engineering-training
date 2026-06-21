@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "tool": "rca_quality_judge.py",
+  "mode": "pairwise",
+  "timestamp_utc": "20260620T235806Z",
+  "judge_model": "claude-opus-4-8",
+  "judge_temperature": null,
+  "judge_max_tokens": 1500,
+  "position_bias_control": "both-orders",
+  "rubric": [
+    {
+      "key": "extraction_fidelity",
+      "definition": "Does the response surface the in-scope signals actually present in the provided evidence, each backed by VERBATIM evidence (exact log lines, metric points, or rows) copied from the task rather than paraphrased or invented? Reward faithful, complete extraction tied to real evidence. Penalize missed signals that the evidence clearly contains, paraphrased or fabricated evidence strings, and claims the provided data does not support."
+    },
+    {
+      "key": "scope_discipline",
+      "definition": "Judged against the reference worker system prompt: does the response stay strictly within the worker's assigned component? A cross-component signal must be flagged tersely as an out-of-scope observation WITHOUT being diagnosed and WITHOUT being promoted into an in-scope finding; a component that is clearly nominal must yield no invented findings. Reward correct routing of foreign signals and restraint when the component is clean. Penalize diagnosing other components, claiming another component's symptoms as the worker's own, fabricating findings to appear useful, and silently dropping a clear cross-component signal."
+    },
+    {
+      "key": "signal_correctness",
+      "definition": "Are the surfaced signals correctly identified and classified, with confidence calibrated to the evidence? Reward correct mechanism identification, correct application of distinctions the component's domain demands (e.g. an infrastructure error vs a business outcome, or an outbound-dependency cause vs an internal one), and confidence proportional to evidential strength. Penalize misidentification, conflating distinct failure classes, and confidence that is over- or under-stated relative to the evidence."
+    }
+  ],
+  "reference_prompt_used": true,
+  "tool_git_sha": "52a3f1c94e6a8e412398d7f41f0c5594448a4d21",
+  "tool_git_dirty": false,
+  "inputs": {
+    "a": {
+      "path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_order-service_gemma-4-12B-it-qat-w4a16-ct.json",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "git_sha": "64acfb8820b003e5a918e5cae64df0d9f543f77f",
+      "git_dirty": false,
+      "system_prompt_sha256": "64b8ac4cc8f0b09dccbd7489c5b88cf73ef40c016004b5bcbc8b80a818737d03",
+      "schema_version": 2,
+      "timestamp_utc": "20260620T232033Z"
+    },
+    "b": {
+      "path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_order-service_gemma-4-12B-it.json",
+      "model": "google/gemma-4-12B-it",
+      "git_sha": "c136001c2f9d34398a4597d35eafe355e9a9ab9d",
+      "git_dirty": false,
+      "system_prompt_sha256": "64b8ac4cc8f0b09dccbd7489c5b88cf73ef40c016004b5bcbc8b80a818737d03",
+      "schema_version": 2,
+      "timestamp_utc": "20260620T232125Z"
+    }
+  },
+  "summary": {
+    "probes_scored": 6,
+    "axis_tally": {
+      "extraction_fidelity": {
+        "model_a": 2,
+        "model_b": 0,
+        "tie": 4,
+        "order_sensitive": 2
+      },
+      "scope_discipline": {
+        "model_a": 0,
+        "model_b": 1,
+        "tie": 5,
+        "order_sensitive": 1
+      },
+      "signal_correctness": {
+        "model_a": 1,
+        "model_b": 0,
+        "tie": 5,
+        "order_sensitive": 2
+      }
+    },
+    "overall_tally": {
+      "model_a": 2,
+      "model_b": 1,
+      "tie": 3,
+      "order_sensitive": 1
+    },
+    "usage": {
+      "input_tokens": 62768,
+      "output_tokens": 4623,
+      "judge_calls": 12
+    }
+  },
+  "per_probe": [
+    {
+      "id": "o1_internal_pool_slowquery",
+      "title": "Internal latency: DB pool contention from a slow query (in-lane)",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "model_a",
+          "order_sensitive": false,
+          "order1_winner": "model_a",
+          "order2_winner": "model_a",
+          "order1_rationale": "A separates the latency/pool-waiter correlation from the slow query into distinct findings and includes the flat-throughput point (515 req/s) demonstrating load is constant. B bundles signals and omits explicit throughput evidence.",
+          "order2_rationale": "B splits the signals cleanly and copies individual metric points verbatim, including the flat-throughput point. A combines metric series into compound strings, which is slightly less faithful to the source rows."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly stay in-lane, identify internal cause, and note no out-of-scope observations. Payment-service p99 was flat, so no cross-component routing was needed; both handled this identically.",
+          "order2_rationale": "Both correctly identify the cause as internal (slow seqscan, pool_waiters) and correctly leave out_of_scope empty since payment-service p99 is flat and nominal. Neither oversteps."
+        },
+        "signal_correctness": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "model_a",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly diagnose internal Postgres contention with payment flat. A more clearly distinguishes the seqscan and the latency/waiters correlation, and surfaces flat throughput confirming load is not the cause. High confidence is justified for both.",
+          "order2_rationale": "Both correctly classify as internal contention via seqscan and pool_waiters, high confidence justified. Both note throughput flat in summary/finding. Mechanism identification is equivalent and correct."
+        }
+      },
+      "overall": {
+        "consensus": "model_a",
+        "order_sensitive": false,
+        "order1_winner": "model_a",
+        "order2_winner": "model_a",
+        "order1_confidence": "medium",
+        "order2_confidence": "low",
+        "order1_rationale": "Both reach the correct internal-contention conclusion with proper scope. A is superior on extraction: it separates distinct signals and includes the flat-throughput evidence that rules out load, strengthening the internal-vs-outbound discriminator.",
+        "order2_rationale": "Equivalent correctness and scope. B edges ahead by explicitly including the flat-throughput evidence point (load-discriminator) and separating the two distinct signals with cleaner verbatim per-point evidence."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"A\", \"rationale\": \"A separates the latency/pool-waiter correlation from the slow query into distinct findings and includes the flat-throughput point (515 req/s) demonstrating load is constant. B bundles signals and omits explicit throughput evidence.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both correctly stay in-lane, identify internal cause, and note no out-of-scope observations. Payment-service p99 was flat, so no cross-component routing was needed; both handled this identically.\"},\n    \"signal_correctness\": {\"winner\": \"A\", \"rationale\": \"Both correctly diagnose internal Postgres contention with payment flat. A more clearly distinguishes the seqscan and the latency/waiters correlation, and surfaces flat throughput confirming load is not the cause. High confidence is justified for both.\"}\n  },\n  \"overall\": {\"winner\": \"A\", \"confidence\": \"medium\", \"rationale\": \"Both reach the correct internal-contention conclusion with proper scope. A is superior on extraction: it separates distinct signals and includes the flat-throughput evidence that rules out load, strengthening the internal-vs-outbound discriminator.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"B\", \"rationale\": \"B splits the signals cleanly and copies individual metric points verbatim, including the flat-throughput point. A combines metric series into compound strings, which is slightly less faithful to the source rows.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify the cause as internal (slow seqscan, pool_waiters) and correctly leave out_of_scope empty since payment-service p99 is flat and nominal. Neither oversteps.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify as internal contention via seqscan and pool_waiters, high confidence justified. Both note throughput flat in summary/finding. Mechanism identification is equivalent and correct.\"}\n  },\n  \"overall\": {\"winner\": \"B\", \"confidence\": \"low\", \"rationale\": \"Equivalent correctness and scope. B edges ahead by explicitly including the flat-throughput evidence point (load-discriminator) and separating the two distinct signals with cleaner verbatim per-point evidence.\"}\n}"
+      }
+    },
+    {
+      "id": "o2_outbound_vs_internal_discriminator",
+      "title": "Outbound-vs-internal discriminator: order-service p99 tracking payment-service",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "model_a",
+          "order_sensitive": false,
+          "order1_winner": "model_a",
+          "order2_winner": "model_a",
+          "order1_rationale": "A includes verbatim pool_waiters and gc_pause_ms metrics backing the 'internal flat' claim, whereas B asserts internals nominal in summary but provides no evidence rows for them.",
+          "order2_rationale": "B includes the pool_waiters and gc_pause_ms metric points as verbatim evidence backing the 'internal stable' claim. A asserts internals nominal but omits the supporting evidence rows. B also surfaces more of the in-scope signals."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both keep the finding to order-service's outbound latency and route payment-service to out_of_scope without diagnosing it. Neither overstepped.",
+          "order2_rationale": "Both correctly route payment-service to out_of_scope_observations without diagnosing it, and both keep the in-scope finding as outbound attribution. Neither oversteps."
+        },
+        "signal_correctness": {
+          "consensus": "model_a",
+          "order_sensitive": false,
+          "order1_winner": "model_a",
+          "order2_winner": "model_a",
+          "order1_rationale": "Both correctly identify outbound mechanism. A's high confidence is better justified because it actually shows flat internal signals; B claims them without evidence, weakening calibration.",
+          "order2_rationale": "Both correctly identify outbound attribution with high confidence. B's claim that internals are stable is backed by the cited flat pool_waiters/gc data; A asserts it without evidence, making B's classification better grounded."
+        }
+      },
+      "overall": {
+        "consensus": "model_a",
+        "order_sensitive": false,
+        "order1_winner": "model_a",
+        "order2_winner": "model_a",
+        "order1_confidence": "medium",
+        "order2_confidence": "medium",
+        "order1_rationale": "A is substantively stronger: it backs the outbound-vs-internal discriminator with verbatim pool_waiters and gc_pause_ms data, justifying high confidence. B asserts internals nominal but omits supporting evidence. Scope handling is equivalent.",
+        "order2_rationale": "Substantively similar, but B grounds the 'internals nominal' discriminator in verbatim pool_waiters and gc_pause_ms data, while A merely asserts it. The outbound-vs-internal call is load-bearing, and B evidences it correctly."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"A\", \"rationale\": \"A includes verbatim pool_waiters and gc_pause_ms metrics backing the 'internal flat' claim, whereas B asserts internals nominal in summary but provides no evidence rows for them.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both keep the finding to order-service's outbound latency and route payment-service to out_of_scope without diagnosing it. Neither overstepped.\"},\n    \"signal_correctness\": {\"winner\": \"A\", \"rationale\": \"Both correctly identify outbound mechanism. A's high confidence is better justified because it actually shows flat internal signals; B claims them without evidence, weakening calibration.\"}\n  },\n  \"overall\": {\"winner\": \"A\", \"confidence\": \"medium\", \"rationale\": \"A is substantively stronger: it backs the outbound-vs-internal discriminator with verbatim pool_waiters and gc_pause_ms data, justifying high confidence. B asserts internals nominal but omits supporting evidence. Scope handling is equivalent.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"B\", \"rationale\": \"B includes the pool_waiters and gc_pause_ms metric points as verbatim evidence backing the 'internal stable' claim. A asserts internals nominal but omits the supporting evidence rows. B also surfaces more of the in-scope signals.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both correctly route payment-service to out_of_scope_observations without diagnosing it, and both keep the in-scope finding as outbound attribution. Neither oversteps.\"},\n    \"signal_correctness\": {\"winner\": \"B\", \"rationale\": \"Both correctly identify outbound attribution with high confidence. B's claim that internals are stable is backed by the cited flat pool_waiters/gc data; A asserts it without evidence, making B's classification better grounded.\"}\n  },\n  \"overall\": {\"winner\": \"B\", \"confidence\": \"medium\", \"rationale\": \"Substantively similar, but B grounds the 'internals nominal' discriminator in verbatim pool_waiters and gc_pause_ms data, while A merely asserts it. The outbound-vs-internal call is load-bearing, and B evidences it correctly.\"}\n}"
+      }
+    },
+    {
+      "id": "o3_lifecycle_stall_sql",
+      "title": "Lifecycle stall: orders accumulating in PENDING_PAYMENT (orders query)",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both surface the PENDING_PAYMENT backlog with identical verbatim evidence 'PENDING_PAYMENT | 842 | 00:14:32'. Neither fabricates. Equivalent extraction.",
+          "order2_rationale": "Both surface the PENDING_PAYMENT backlog with identical verbatim evidence row. Neither invents data. Equivalent extraction."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both report the backlog as the in-scope finding without diagnosing payment-service as the cause. Neither over-diagnoses; both keep out_of_scope_observations empty. Equivalent restraint.",
+          "order2_rationale": "Both correctly report the backlog as an in-scope lifecycle stall without diagnosing the payment-service cause, and both leave out_of_scope empty. Equivalent restraint."
+        },
+        "signal_correctness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly classify as a lifecycle stall with high confidence, justified by the aging updated_at. Identical mechanism identification and calibration.",
+          "order2_rationale": "Both correctly classify the lifecycle stall as high confidence and avoid diagnosing the outbound cause. Equivalent classification and calibration."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": false,
+        "order1_winner": "tie",
+        "order2_winner": "tie",
+        "order1_confidence": "high",
+        "order2_confidence": "high",
+        "order1_rationale": "Responses are substantively identical: same finding, same verbatim evidence, same high confidence, same empty out-of-scope list. Only trivial phrasing differs, which is explicitly ignored.",
+        "order2_rationale": "Responses are substantively identical: same finding, same verbatim evidence, same confidence, empty out-of-scope. Only phrasing differs, which is explicitly ignored."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both surface the PENDING_PAYMENT backlog with identical verbatim evidence 'PENDING_PAYMENT | 842 | 00:14:32'. Neither fabricates. Equivalent extraction.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both report the backlog as the in-scope finding without diagnosing payment-service as the cause. Neither over-diagnoses; both keep out_of_scope_observations empty. Equivalent restraint.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify as a lifecycle stall with high confidence, justified by the aging updated_at. Identical mechanism identification and calibration.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses are substantively identical: same finding, same verbatim evidence, same high confidence, same empty out-of-scope list. Only trivial phrasing differs, which is explicitly ignored.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both surface the PENDING_PAYMENT backlog with identical verbatim evidence row. Neither invents data. Equivalent extraction.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both correctly report the backlog as an in-scope lifecycle stall without diagnosing the payment-service cause, and both leave out_of_scope empty. Equivalent restraint.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify the lifecycle stall as high confidence and avoid diagnosing the outbound cause. Equivalent classification and calibration.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses are substantively identical: same finding, same verbatim evidence, same confidence, empty out-of-scope. Only phrasing differs, which is explicitly ignored.\"}\n}"
+      }
+    },
+    {
+      "id": "o4_scope_discipline_foreign_signals",
+      "title": "Scope trap: order-service clean, foreign Redis/inventory signals present",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "model_b",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly find order-service nominal. B's out-of-scope pointers include specific values (35ms to 44ms) closer to verbatim, slightly more faithful to the evidence; neither fabricates findings.",
+          "order2_rationale": "Both correctly identify order-service as nominal with empty findings. Neither quotes verbatim metric points in out_of_scope observations, but both paraphrase tersely, which is acceptable for cross-component pointers."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "tie",
+          "order2_winner": "model_b",
+          "order1_rationale": "Both correctly route redis and inventory-service signals to out_of_scope_observations without diagnosing them, and both correctly emit empty findings for nominal order-service. No overstep in either.",
+          "order2_rationale": "A routes foreign signals without diagnosis. B's summary 'evidence points to external redis and inventory-service issues' edges toward diagnosing/concluding on other components, slightly overstepping the no-diagnosis boundary."
+        },
+        "signal_correctness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly identify the lone pool_waiters=1 blip and p99 as nominal, and correctly classify redis/inventory as foreign. Neither overstates confidence; classification equivalent.",
+          "order2_rationale": "Both correctly classify order-service as clean and pool_waiters/p99 as within steady-state. Both route redis and inventory signals out without misidentification or unwarranted confidence."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": true,
+        "order1_winner": "tie",
+        "order2_winner": "model_b",
+        "order1_confidence": "medium",
+        "order2_confidence": "low",
+        "order1_rationale": "Substantively equivalent: both correctly return nominal order-service with foreign signals routed out of scope. B's slightly more specific out-of-scope pointer is marginal and not enough to outweigh overall parity.",
+        "order2_rationale": "Substantively near-identical and both correct. A edges ahead by keeping out-of-scope signals as pure pointers, whereas B's summary mildly editorializes about external causes, a slight scope-discipline slip."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"B\", \"rationale\": \"Both correctly find order-service nominal. B's out-of-scope pointers include specific values (35ms to 44ms) closer to verbatim, slightly more faithful to the evidence; neither fabricates findings.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both correctly route redis and inventory-service signals to out_of_scope_observations without diagnosing them, and both correctly emit empty findings for nominal order-service. No overstep in either.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify the lone pool_waiters=1 blip and p99 as nominal, and correctly classify redis/inventory as foreign. Neither overstates confidence; classification equivalent.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"medium\", \"rationale\": \"Substantively equivalent: both correctly return nominal order-service with foreign signals routed out of scope. B's slightly more specific out-of-scope pointer is marginal and not enough to outweigh overall parity.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify order-service as nominal with empty findings. Neither quotes verbatim metric points in out_of_scope observations, but both paraphrase tersely, which is acceptable for cross-component pointers.\"},\n    \"scope_discipline\": {\"winner\": \"A\", \"rationale\": \"A routes foreign signals without diagnosis. B's summary 'evidence points to external redis and inventory-service issues' edges toward diagnosing/concluding on other components, slightly overstepping the no-diagnosis boundary.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify order-service as clean and pool_waiters/p99 as within steady-state. Both route redis and inventory signals out without misidentification or unwarranted confidence.\"}\n  },\n  \"overall\": {\"winner\": \"A\", \"confidence\": \"low\", \"rationale\": \"Substantively near-identical and both correct. A edges ahead by keeping out-of-scope signals as pure pointers, whereas B's summary mildly editorializes about external causes, a slight scope-discipline slip.\"}\n}"
+      }
+    },
+    {
+      "id": "o5_nominal_with_cancellation",
+      "title": "Nominal order-service with a benign cancellation (do not fabricate a finding)",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly extract no signals; order-service is clean. p99 stable ~80ms, error rate low, no stuck orders, m02 is a normal customer abort. Neither fabricates evidence.",
+          "order2_rationale": "Both correctly identify nominal state with empty findings. Neither fabricates signals. B references the ~80ms p99 value, but neither cites verbatim evidence in a findings array, which is moot since clean."
+        },
+        "scope_discipline": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly return empty findings and empty out_of_scope_observations, showing restraint on a nominal component without inventing problems or diagnosing other components.",
+          "order2_rationale": "Both stay in lane, return empty findings, no out-of-scope observations. Both correctly avoid promoting the m02 customer_abort cancellation (a benign business outcome) into a finding."
+        },
+        "signal_correctness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly classify the component as nominal, treating the CANCELLED order as a benign business outcome rather than an infra finding. Identical correct conclusions.",
+          "order2_rationale": "Both correctly classify order-service as nominal: flat p99, low error rate, no stuck non-terminal orders. m03 ending at PAID is fresh, not a stall. Both avoid over-stating confidence in a fabricated signal."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": false,
+        "order1_winner": "tie",
+        "order2_winner": "tie",
+        "order1_confidence": "high",
+        "order2_confidence": "high",
+        "order1_rationale": "The two responses are substantively identical: same empty findings, same nominal conclusion, near-identical summaries. The only difference is a trivial phrasing detail in the summary, which is not graded.",
+        "order2_rationale": "Responses are substantively identical: correct nominal verdict, empty findings, no false signals. B's parenthetical ~80ms is trivial flavor, not a substantive difference."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both correctly extract no signals; order-service is clean. p99 stable ~80ms, error rate low, no stuck orders, m02 is a normal customer abort. Neither fabricates evidence.\"},\n    \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both correctly return empty findings and empty out_of_scope_observations, showing restraint on a nominal component without inventing problems or diagnosing other components.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify the component as nominal, treating the CANCELLED order as a benign business outcome rather than an infra finding. Identical correct conclusions.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"The two responses are substantively identical: same empty findings, same nominal conclusion, near-identical summaries. The only difference is a trivial phrasing detail in the summary, which is not graded.\"}\n}",
+        "order2": "{\"axes\": {\"extraction_fidelity\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify nominal state with empty findings. Neither fabricates signals. B references the ~80ms p99 value, but neither cites verbatim evidence in a findings array, which is moot since clean.\"}, \"scope_discipline\": {\"winner\": \"tie\", \"rationale\": \"Both stay in lane, return empty findings, no out-of-scope observations. Both correctly avoid promoting the m02 customer_abort cancellation (a benign business outcome) into a finding.\"}, \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly classify order-service as nominal: flat p99, low error rate, no stuck non-terminal orders. m03 ending at PAID is fresh, not a stall. Both avoid over-stating confidence in a fabricated signal.\"}}, \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses are substantively identical: correct nominal verdict, empty findings, no false signals. B's parenthetical ~80ms is trivial flavor, not a substantive difference.\"}}"
+      }
+    },
+    {
+      "id": "o6_internal_gc_pauses",
+      "title": "Internal latency: GC pauses correlated with p99, outbound normal",
+      "axes": {
+        "extraction_fidelity": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "model_a",
+          "order2_winner": "model_b",
+          "order1_rationale": "A includes verbatim payment-service points (125ms, 119ms) to show outbound flatness, strengthening the GC correlation. B cites only order-service spikes and paraphrases the payment-service stability into an observation rather than verbatim.",
+          "order2_rationale": "Both quote verbatim p99 and GC points. B includes payment-service metric points within in-scope finding evidence, mixing cross-component data into the finding; A keeps the GC/p99 finding clean and notes payment stability separately."
+        },
+        "scope_discipline": {
+          "consensus": "model_b",
+          "order_sensitive": false,
+          "order1_winner": "model_b",
+          "order2_winner": "model_b",
+          "order1_rationale": "Payment-service is the cross-component reference used to discriminate. B correctly flags it as out_of_scope_observation; A folds payment-service evidence into an in-scope finding. Both correctly avoid diagnosing the dependency, but B routes it properly.",
+          "order2_rationale": "A correctly routes payment-service stability to out_of_scope_observations. B silently drops the cross-component pointer and embeds payment-service metrics inside the in-scope finding, blurring the boundary."
+        },
+        "signal_correctness": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "tie",
+          "order2_winner": "model_b",
+          "order1_rationale": "Both correctly identify internal GC-driven latency with outbound flat, high confidence well-calibrated. B notes minimal pool contention. Neither overstates; mechanism identification is equivalent and accurate.",
+          "order2_rationale": "Both correctly identify internal GC-driven latency with high confidence. A also notes minimal pool contention (1 waiter), slightly richer and accurate. Essentially equivalent mechanism identification, A marginally better."
+        }
+      },
+      "overall": {
+        "consensus": "model_b",
+        "order_sensitive": false,
+        "order1_winner": "model_b",
+        "order2_winner": "model_b",
+        "order1_confidence": "low",
+        "order2_confidence": "medium",
+        "order1_rationale": "Scope routing favors B, which correctly places the payment-service comparison in out_of_scope_observations rather than the finding. A's stronger verbatim coverage slightly offsets, but proper boundary handling per the system prompt tips it to B.",
+        "order2_rationale": "A identifies the same GC mechanism but adheres better to scope by routing the payment-service observation out-of-scope, whereas B folds outbound metrics into the in-scope finding and drops the cross-component pointer."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"A\", \"rationale\": \"A includes verbatim payment-service points (125ms, 119ms) to show outbound flatness, strengthening the GC correlation. B cites only order-service spikes and paraphrases the payment-service stability into an observation rather than verbatim.\"},\n    \"scope_discipline\": {\"winner\": \"B\", \"rationale\": \"Payment-service is the cross-component reference used to discriminate. B correctly flags it as out_of_scope_observation; A folds payment-service evidence into an in-scope finding. Both correctly avoid diagnosing the dependency, but B routes it properly.\"},\n    \"signal_correctness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify internal GC-driven latency with outbound flat, high confidence well-calibrated. B notes minimal pool contention. Neither overstates; mechanism identification is equivalent and accurate.\"}\n  },\n  \"overall\": {\"winner\": \"B\", \"confidence\": \"low\", \"rationale\": \"Scope routing favors B, which correctly places the payment-service comparison in out_of_scope_observations rather than the finding. A's stronger verbatim coverage slightly offsets, but proper boundary handling per the system prompt tips it to B.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"winner\": \"A\", \"rationale\": \"Both quote verbatim p99 and GC points. B includes payment-service metric points within in-scope finding evidence, mixing cross-component data into the finding; A keeps the GC/p99 finding clean and notes payment stability separately.\"},\n    \"scope_discipline\": {\"winner\": \"A\", \"rationale\": \"A correctly routes payment-service stability to out_of_scope_observations. B silently drops the cross-component pointer and embeds payment-service metrics inside the in-scope finding, blurring the boundary.\"},\n    \"signal_correctness\": {\"winner\": \"A\", \"rationale\": \"Both correctly identify internal GC-driven latency with high confidence. A also notes minimal pool contention (1 waiter), slightly richer and accurate. Essentially equivalent mechanism identification, A marginally better.\"}\n  },\n  \"overall\": {\"winner\": \"A\", \"confidence\": \"medium\", \"rationale\": \"A identifies the same GC mechanism but adheres better to scope by routing the payment-service observation out-of-scope, whereas B folds outbound metrics into the in-scope finding and drops the cross-component pointer.\"}\n}"
+      }
+    }
+  ]
+}

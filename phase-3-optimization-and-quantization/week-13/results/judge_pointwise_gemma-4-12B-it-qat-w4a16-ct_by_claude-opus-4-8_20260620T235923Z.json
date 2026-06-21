@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "tool": "rca_quality_judge.py",
+  "mode": "pointwise",
+  "timestamp_utc": "20260620T235923Z",
+  "judge_model": "claude-opus-4-8",
+  "judge_temperature": null,
+  "judge_max_tokens": 1500,
+  "position_bias_control": "n/a",
+  "rubric": [
+    {
+      "key": "extraction_fidelity",
+      "definition": "Does the response surface the in-scope signals actually present in the provided evidence, each backed by VERBATIM evidence (exact log lines, metric points, or rows) copied from the task rather than paraphrased or invented? Reward faithful, complete extraction tied to real evidence. Penalize missed signals that the evidence clearly contains, paraphrased or fabricated evidence strings, and claims the provided data does not support."
+    },
+    {
+      "key": "scope_discipline",
+      "definition": "Judged against the reference worker system prompt: does the response stay strictly within the worker's assigned component? A cross-component signal must be flagged tersely as an out-of-scope observation WITHOUT being diagnosed and WITHOUT being promoted into an in-scope finding; a component that is clearly nominal must yield no invented findings. Reward correct routing of foreign signals and restraint when the component is clean. Penalize diagnosing other components, claiming another component's symptoms as the worker's own, fabricating findings to appear useful, and silently dropping a clear cross-component signal."
+    },
+    {
+      "key": "signal_correctness",
+      "definition": "Are the surfaced signals correctly identified and classified, with confidence calibrated to the evidence? Reward correct mechanism identification, correct application of distinctions the component's domain demands (e.g. an infrastructure error vs a business outcome, or an outbound-dependency cause vs an internal one), and confidence proportional to evidential strength. Penalize misidentification, conflating distinct failure classes, and confidence that is over- or under-stated relative to the evidence."
+    }
+  ],
+  "reference_prompt_used": true,
+  "tool_git_sha": "52a3f1c94e6a8e412398d7f41f0c5594448a4d21",
+  "tool_git_dirty": true,
+  "inputs": {
+    "a": {
+      "path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_order-service_gemma-4-12B-it-qat-w4a16-ct.json",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "git_sha": "64acfb8820b003e5a918e5cae64df0d9f543f77f",
+      "git_dirty": false,
+      "system_prompt_sha256": "64b8ac4cc8f0b09dccbd7489c5b88cf73ef40c016004b5bcbc8b80a818737d03",
+      "schema_version": 2,
+      "timestamp_utc": "20260620T232033Z"
+    }
+  },
+  "summary": {
+    "probes_scored": 6,
+    "axis_means": {
+      "extraction_fidelity": 4.667,
+      "scope_discipline": 4.833,
+      "signal_correctness": 5.0
+    },
+    "overall_mean": 5.0,
+    "usage": {
+      "input_tokens": 29810,
+      "output_tokens": 2439,
+      "judge_calls": 6
+    }
+  },
+  "per_probe": [
+    {
+      "id": "o1_internal_pool_slowquery",
+      "title": "Internal latency: DB pool contention from a slow query (in-lane)",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 5,
+          "rationale": "All key signals surfaced: p99 spike, pool_waiters growth, flat throughput, slow_query on orders. Evidence strings copied verbatim from metric points and the log line. Complete and faithful extraction."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "Correctly stays in-lane: identifies internal Postgres pool contention and slow query. Notably did not diagnose payment-service; the flat PSP p99 correctly supports ruling out outbound, no foreign component diagnosed or fabricated."
+        },
+        "signal_correctness": {
+          "score": 5,
+          "rationale": "Correct mechanism: internal contention (rising pool_waiters + seqscan holding connections) with flat outbound dependency, correctly distinguishing internal from outbound. High confidence is well-calibrated given lockstep evidence and flat payment p99."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Accurate in-scope extraction with verbatim evidence, correct internal-vs-outbound discrimination, and proper restraint on cross-component diagnosis. Confidence calibration matches strong evidence. Minor: could have noted PSP flatness explicitly, but unnecessary."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 5, \"rationale\": \"All key signals surfaced: p99 spike, pool_waiters growth, flat throughput, slow_query on orders. Evidence strings copied verbatim from metric points and the log line. Complete and faithful extraction.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"Correctly stays in-lane: identifies internal Postgres pool contention and slow query. Notably did not diagnose payment-service; the flat PSP p99 correctly supports ruling out outbound, no foreign component diagnosed or fabricated.\"},\n    \"signal_correctness\": {\"score\": 5, \"rationale\": \"Correct mechanism: internal contention (rising pool_waiters + seqscan holding connections) with flat outbound dependency, correctly distinguishing internal from outbound. High confidence is well-calibrated given lockstep evidence and flat payment p99.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"Accurate in-scope extraction with verbatim evidence, correct internal-vs-outbound discrimination, and proper restraint on cross-component diagnosis. Confidence calibration matches strong evidence. Minor: could have noted PSP flatness explicitly, but unnecessary.\"}\n}"
+    },
+    {
+      "id": "o2_outbound_vs_internal_discriminator",
+      "title": "Outbound-vs-internal discriminator: order-service p99 tracking payment-service",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 4,
+          "rationale": "Verbatim metric lines copied correctly for p99, payment, pool_waiters, gc. Omitted the payment log lines (k01/k02 awaiting payment, payment_call_ms=3001) which corroborate the outbound diagnosis, but core signals are faithful."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "Correctly classifies outbound latency as order-service finding while routing payment-service spike tersely to out_of_scope without diagnosing the PSP. Textbook scope adherence."
+        },
+        "signal_correctness": {
+          "score": 5,
+          "rationale": "Correctly applies outbound-vs-internal discriminator: payment p99 rose in lockstep, internal signals flat. High confidence is well-calibrated to the strong evidence."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Accurate outbound-latency identification with correct scope routing and calibrated confidence. Minor extraction gap: the payment log lines weren't surfaced as corroborating evidence, but the core finding is fully supported and well-executed."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 4, \"rationale\": \"Verbatim metric lines copied correctly for p99, payment, pool_waiters, gc. Omitted the payment log lines (k01/k02 awaiting payment, payment_call_ms=3001) which corroborate the outbound diagnosis, but core signals are faithful.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"Correctly classifies outbound latency as order-service finding while routing payment-service spike tersely to out_of_scope without diagnosing the PSP. Textbook scope adherence.\"},\n    \"signal_correctness\": {\"score\": 5, \"rationale\": \"Correctly applies outbound-vs-internal discriminator: payment p99 rose in lockstep, internal signals flat. High confidence is well-calibrated to the strong evidence.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"Accurate outbound-latency identification with correct scope routing and calibrated confidence. Minor extraction gap: the payment log lines weren't surfaced as corroborating evidence, but the core finding is fully supported and well-executed.\"}\n}"
+    },
+    {
+      "id": "o3_lifecycle_stall_sql",
+      "title": "Lifecycle stall: orders accumulating in PENDING_PAYMENT (orders query)",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 5,
+          "rationale": "Correctly surfaces the PENDING_PAYMENT backlog with a faithful row from the table. Other statuses are normal (fresh updated_at) and correctly not flagged as signal."
+        },
+        "scope_discipline": {
+          "score": 4,
+          "rationale": "Reports the backlog as the in-scope finding without diagnosing payment-service. Reasonable to omit a cross-component pointer since cause is unconfirmed, though a terse note about likely outbound stall could have been routed."
+        },
+        "signal_correctness": {
+          "score": 5,
+          "rationale": "Correctly classifies as a lifecycle stall (infra signal, not a business outcome), high confidence justified by 842 stuck non-terminal rows aging 14m while others are fresh. Avoids over-diagnosing the cause."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Accurate, verbatim-backed lifecycle-stall finding with calibrated confidence and proper restraint from diagnosing payment-service. A terse out-of-scope pointer toward the stalled-confirmation dependency would have been the only marginal improvement."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 5, \"rationale\": \"Correctly surfaces the PENDING_PAYMENT backlog with a faithful row from the table. Other statuses are normal (fresh updated_at) and correctly not flagged as signal.\"},\n    \"scope_discipline\": {\"score\": 4, \"rationale\": \"Reports the backlog as the in-scope finding without diagnosing payment-service. Reasonable to omit a cross-component pointer since cause is unconfirmed, though a terse note about likely outbound stall could have been routed.\"},\n    \"signal_correctness\": {\"score\": 5, \"rationale\": \"Correctly classifies as a lifecycle stall (infra signal, not a business outcome), high confidence justified by 842 stuck non-terminal rows aging 14m while others are fresh. Avoids over-diagnosing the cause.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"Accurate, verbatim-backed lifecycle-stall finding with calibrated confidence and proper restraint from diagnosing payment-service. A terse out-of-scope pointer toward the stalled-confirmation dependency would have been the only marginal improvement.\"}\n}"
+    },
+    {
+      "id": "o4_scope_discipline_foreign_signals",
+      "title": "Scope trap: order-service clean, foreign Redis/inventory signals present",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 4,
+          "rationale": "Correctly identifies order-service as nominal with no findings. However, out_of_scope pointers paraphrase rather than quote verbatim metric points/log lines, slightly weakening evidence fidelity, though OOS entries aren't strictly held to the verbatim audit standard."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "Exemplary restraint: empty findings for clean order-service, no invented problems, and cross-component redis/inventory signals tersely routed to out_of_scope without diagnosis. Correct routing of foreign signals."
+        },
+        "signal_correctness": {
+          "score": 5,
+          "rationale": "Correctly reads flat p99 (~80ms) and near-zero pool_waiters as nominal, refusing to attribute the redis/inventory issue to order-service. Properly distinguishes internal vs external. Calibration is sound."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "A near-ideal response: recognizes order-service is clean, avoids fabricating findings, and routes the redis/inventory signals out of scope without diagnosing them. Minor nit is non-verbatim OOS phrasing, which is acceptable for pointers."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 4, \"rationale\": \"Correctly identifies order-service as nominal with no findings. However, out_of_scope pointers paraphrase rather than quote verbatim metric points/log lines, slightly weakening evidence fidelity, though OOS entries aren't strictly held to the verbatim audit standard.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"Exemplary restraint: empty findings for clean order-service, no invented problems, and cross-component redis/inventory signals tersely routed to out_of_scope without diagnosis. Correct routing of foreign signals.\"},\n    \"signal_correctness\": {\"score\": 5, \"rationale\": \"Correctly reads flat p99 (~80ms) and near-zero pool_waiters as nominal, refusing to attribute the redis/inventory issue to order-service. Properly distinguishes internal vs external. Calibration is sound.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"A near-ideal response: recognizes order-service is clean, avoids fabricating findings, and routes the redis/inventory signals out of scope without diagnosing them. Minor nit is non-verbatim OOS phrasing, which is acceptable for pointers.\"}\n}"
+    },
+    {
+      "id": "o5_nominal_with_cancellation",
+      "title": "Nominal order-service with a benign cancellation (do not fabricate a finding)",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 5,
+          "rationale": "Correctly recognizes evidence shows nominal state. p99 flat (~80ms), error_rate low, orders progressing normally including a business cancellation. No invented or fabricated signals; correctly returns empty findings."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "No cross-component signal exists to route. Restraint shown by not manufacturing findings or out-of-scope observations. Correctly treats m02 cancellation as benign business outcome, not infra."
+        },
+        "signal_correctness": {
+          "score": 5,
+          "rationale": "Correctly classifies as nominal; m03 ending at PAID is fresh, not a stall; m02 CANCELLED is business outcome. Confidence appropriately omitted via empty findings."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Evidence is clean: flat p99, low errors, normal lifecycle progression with one customer-abort cancellation. Response correctly returns nominal with no fabricated findings and no spurious out-of-scope pointers. Summary is accurate and terse."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 5, \"rationale\": \"Correctly recognizes evidence shows nominal state. p99 flat (~80ms), error_rate low, orders progressing normally including a business cancellation. No invented or fabricated signals; correctly returns empty findings.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"No cross-component signal exists to route. Restraint shown by not manufacturing findings or out-of-scope observations. Correctly treats m02 cancellation as benign business outcome, not infra.\"},\n    \"signal_correctness\": {\"score\": 5, \"rationale\": \"Correctly classifies as nominal; m03 ending at PAID is fresh, not a stall; m02 CANCELLED is business outcome. Confidence appropriately omitted via empty findings.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"Evidence is clean: flat p99, low errors, normal lifecycle progression with one customer-abort cancellation. Response correctly returns nominal with no fabricated findings and no spurious out-of-scope pointers. Summary is accurate and terse.\"}\n}"
+    },
+    {
+      "id": "o6_internal_gc_pauses",
+      "title": "Internal latency: GC pauses correlated with p99, outbound normal",
+      "axes": {
+        "extraction_fidelity": {
+          "score": 5,
+          "rationale": "Surfaces the GC/p99 lockstep correctly with verbatim metric points. Includes payment-service points to demonstrate flatness. All evidence strings copied exactly from the task."
+        },
+        "scope_discipline": {
+          "score": 5,
+          "rationale": "Correctly diagnoses internal GC as in-lane, does not diagnose payment-service. Payment flatness used only as discriminator, not promoted. No fabricated cross-component finding; no spurious out-of-scope needed."
+        },
+        "signal_correctness": {
+          "score": 5,
+          "rationale": "Correctly applies outbound-vs-internal discriminator: p99 spikes lockstep with gc_pause_ms while payment-service flat and pool_waiters near-zero. Internal GC mechanism correct; high confidence well-calibrated to strong evidence."
+        }
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Accurate internal-GC identification with verbatim evidence, correct application of the load-bearing discriminator, and proper scope restraint. Confidence is justified. A near-ideal response."
+      },
+      "_raw": "{\n  \"axes\": {\n    \"extraction_fidelity\": {\"score\": 5, \"rationale\": \"Surfaces the GC/p99 lockstep correctly with verbatim metric points. Includes payment-service points to demonstrate flatness. All evidence strings copied exactly from the task.\"},\n    \"scope_discipline\": {\"score\": 5, \"rationale\": \"Correctly diagnoses internal GC as in-lane, does not diagnose payment-service. Payment flatness used only as discriminator, not promoted. No fabricated cross-component finding; no spurious out-of-scope needed.\"},\n    \"signal_correctness\": {\"score\": 5, \"rationale\": \"Correctly applies outbound-vs-internal discriminator: p99 spikes lockstep with gc_pause_ms while payment-service flat and pool_waiters near-zero. Internal GC mechanism correct; high confidence well-calibrated to strong evidence.\"}\n  },\n  \"overall\": {\"score\": 5, \"rationale\": \"Accurate internal-GC identification with verbatim evidence, correct application of the load-bearing discriminator, and proper scope restraint. Confidence is justified. A near-ideal response.\"}\n}"
+    }
+  ]
+}
