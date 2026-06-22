@@ -9,6 +9,12 @@ Source markdown and publication index for LinkedIn articles written from this tr
 
 ## Published
 
+### 2026-06-21 — Did 4-bit Quantization Quietly Make My Models Worse? Here's How I Actually Checked
+
+- **Source:** [2026-06-21-pulse-llm-as-judge-quantization-quality.md](./2026-06-21-pulse-llm-as-judge-quantization-quality.md)
+- **LinkedIn:** [2026-06-21-pulse-llm-as-judge-quantization-quality.md](https://www.linkedin.com/pulse/did-4-bit-quantization-quietly-make-my-models-worse-heres-samuelson-yzhxc/)
+- **Topics:** LLM-as-judge, quantization quality, QAT (W4A16, compressed-tensors), BF16 parent comparison, position-bias control, pairwise vs pointwise scoring, deterministic format conformance, Gemma 4 31B / 12B, RCA operator copilot, orchestrator/worker tiering, Claude Opus judge
+
 ### 2026-04-06 — Gemma 4 MoE vs Dense on Two RTX 3090s: Same Hardware, Same Script, Very Different Models
 
 - **Source:** [2026-04-06-gemma4-moe-vs-dense-rtx3090.md](./2026-04-06-gemma4-moe-vs-dense-rtx3090.md)
