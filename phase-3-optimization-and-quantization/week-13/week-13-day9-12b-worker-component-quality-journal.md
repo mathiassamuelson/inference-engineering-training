@@ -107,6 +107,17 @@ present.
    a unified-architecture bug and the QAT (same architecture) loaded clean, the fix is confirmed
    upstream in v0.23.0 — no per-model serving workarounds remain at the worker tier.
 
+   *On "Marlin WNA16":* WNA16 is the quantization scheme — **W**eights at **N** bits, **A**ctivations
+   at 16 bits (weight-only); this checkpoint is the N=4 case, i.e. W4A16. Marlin is the GPU kernel
+   that executes it: a mixed-precision GEMM that holds the 4-bit weights in VRAM and dequantizes them
+   to 16 bits inside the kernel, just before the tensor-core multiply, so it actually realises the
+   bandwidth saving of 4-bit weights (≈¼ the bytes streamed from VRAM) up to moderate batch sizes
+   rather than stalling on the dequant step. It requires Ampere or newer (sm_80+); the 3090s are
+   sm_86, so they qualify, and vLLM selects Marlin automatically for WNA16 on Ampere. Seeing
+   `MarlinLinearKernel for CompressedTensorsWNA16` in the log therefore confirms two things at once:
+   quantization is genuinely active (not the shallow-replace fallback to dense BF16), and it is on the
+   fast path — the mechanism behind the QAT decode-throughput advantage measured earlier in the week.
+
 2. **CHECKPOINT: fenced-example mimicry (payment-service slice).** The first payment-service capture
    came back 1/6 (QAT) and 0/6 (BF16) strict-conformant — but `schema_valid` was 6/6 on both. The
    models understood and filled the contract correctly; they wrapped it in a ```` ```json ```` fence,
