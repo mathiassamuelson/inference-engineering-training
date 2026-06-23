@@ -40,7 +40,7 @@ flake8                        # Lint code
 ### Key Components
 - `tools/` - Reusable utilities and helper scripts
 - `docs/training-plan.md` - Full 24-week curriculum
-- `docs/weekly-reports/` - Weekly learnings and analysis
+- `phase-N-*/week-NN*/` - weekly reports and journals, alongside their results and code
 
 ### Benchmark Scripts Pattern
 Benchmark scripts (like `baseline_benchmark.py`) follow this pattern:

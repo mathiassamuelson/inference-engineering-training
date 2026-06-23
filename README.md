@@ -30,7 +30,7 @@
 - **FP16 vs FP32:** 1.56x speedup (memory bandwidth limited)
 - **Throughput:** 84 tokens/sec on single RTX 3090
 - **Learning:** Small models don't benefit from multi-GPU
-- [Full Analysis →](docs/weekly-reports/week-01.md)
+- [Full Analysis →](phase-1-foundation/week-01-benchmarks/week-01.md)
 
 ## 📁 Repository Structure
 
