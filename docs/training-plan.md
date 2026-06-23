@@ -1,6 +1,6 @@
 # Training Plan: NVIDIA Inference Stack Mastery (Revised)
 
-*Last updated: June 9, 2026 — reflects completion of Week 11 (TP-vs-PP + max-MML characterization) and a Phase 3 revision: Weeks 12–13 repurposed from quantization methods to sub-agent-tier validation and the delegation architecture; quality-degradation measurement folded into Week 23. Week 12 path updated to the `vllm/vllm-openai:gemma4-unified` launch image (PR #44429) for the encoder-free 12B Unified model.*
+*Last updated: June 22, 2026 — Weeks 12 and 13 complete. Week 13 ran as a two-tier QAT quality-characterization week (BF16-vs-QAT equivalence at both tiers via a position-bias-controlled LLM-as-judge harness) on a converged `vllm/vllm-openai:v0.23.0` image, rather than the originally-planned concurrent-serving/interference focus; the operational-proof remainder (nginx load-balancing fix + architecture write-up) carries into Week 14. Week 14 is repurposed from "Speculative Decoding" to a Phase-3 close-out / loose-ends week (repo split + reorg, nginx load-balancing, the throughput Pulse, and a 12B-QAT TP/PP throughput sweep). Speculative decoding shifts to Week 15 and NSight profiling to Week 16, extending Phase 3 to Weeks 11–16 and the program to 28 weeks (downstream phases shift +1). Quality-degradation measurement remains folded into the latency-quality week (now Week 24).*
 
 ---
 
@@ -117,9 +117,9 @@
 
 ---
 
-## Phase 3: Optimization & Quantization (Weeks 11-15)
+## Phase 3: Optimization & Quantization (Weeks 11-16)
 
-*Goal: Master parallelism strategies, then validate and operationalize the tiered delegation architecture that emerged from the Week 11 parallelism work. Phase 3 starts at Week 11 and runs 5 weeks. Weeks 12–13 were repurposed from the original quantization-methods content (rendered largely redundant by the Gemma deployment work in Weeks 8/9/11) to sub-agent-tier validation and concurrent two-tier serving; the surviving quality-degradation measurement moved to Week 23.*
+*Goal: Master parallelism strategies, then validate and operationalize the tiered delegation architecture that emerged from the Week 11 parallelism work. Phase 3 starts at Week 11 and runs 6 weeks. Weeks 12–13 were repurposed from the original quantization-methods content (rendered largely redundant by the Gemma deployment work in Weeks 8/9/11) to sub-agent-tier validation and two-tier QAT quality characterization; Week 14 is a Phase-3 close-out / loose-ends week. The originally-planned speculative-decoding and NSight content shifts to Weeks 15–16. The surviving quality-degradation measurement moved to Week 24.*
 
 ### Week 11: Parallelism Strategy Comparison — TP vs PP on Gemma 4 31B Dense FP8 ✅
 
@@ -154,7 +154,7 @@
 
 ### Week 12: Sub-agent tier validation & the delegation architecture
 
-*Repurposed from the original "Quantization Methods (AWQ, GPTQ)" block. Rationale: the Gemma work already established quantization as a working baseline — AWQ-on-Ampere (Week 8), KV-side savings under HMA (Week 9), FP8 datapoints (Week 11) — so the deployment-performance side of the original quantization weeks is redundant. The general operating principle is to run the highest-fidelity model that gives an acceptable context window, not to compare one quantization against another. The systematic quality-degradation measurement (the one part of the old Week 12 still wanted) moves to Week 23. This week instead validates the cheap tier of the delegation architecture that emerged from Week 11.*
+*Repurposed from the original "Quantization Methods (AWQ, GPTQ)" block. Rationale: the Gemma work already established quantization as a working baseline — AWQ-on-Ampere (Week 8), KV-side savings under HMA (Week 9), FP8 datapoints (Week 11) — so the deployment-performance side of the original quantization weeks is redundant. The general operating principle is to run the highest-fidelity model that gives an acceptable context window, not to compare one quantization against another. The systematic quality-degradation measurement (the one part of the old Week 12 still wanted) moves to Week 24. This week instead validates the cheap tier of the delegation architecture that emerged from Week 11.*
 
 *The architecture, stated substrate-neutrally: a capable model orchestrates and reasons over distilled findings; cheap, fast specialists do the bulk context work; the tiers are decoupled from the deployment substrate, so the same design runs on frontier APIs or self-hosted weights depending on a customer's cost and privacy constraints. The self-hosted realization here (31B orchestrator + 12B sub-agents on consumer GPUs) is the proof case, not the thesis.*
 
@@ -170,7 +170,7 @@
 - **Outcome (Week 12 complete):** Sub-agent tier **validated** — go on the delegation architecture. The QAT 
   checkpoint loads and serves on a single 24 GB card (8.28 GiB weights; Day 1's OOM was self-inflicted via a shallow-replacing `--hf-overrides`, plus one genuine image bug patched via a 3-line upstream backport — retire at version convergence). No memory ceiling exists on this card: the full 262,144 architectural context fits at 2.16× concurrency. **Production MML: 131,072** — the model's `max_position_embeddings` validation boundary; memory permits 262K but the 131K–262K range is quality-unvalidated (see the Week 12 summary journal for the full rationale and the long-context evaluation open item). Measured: decode 69.6 tok/s @8K / 51.7 @64K / 46.2 @102K; batching pays 2.33× at 8K but the worker is functionally serial at 64K+ — a direct input to Week 13's front-door design (queueing ≈ batching at depth, with better latency). The "characterize the real ceiling rather than trusting either number" instruction above is resolved: the card's 256K is mechanically real, the config's 128K is the validated envelope, and we ship the latter.
 
-### Week 13: The delegation architecture, operational — concurrent two-tier serving
+### Week 13: Two-tier QAT quality characterization (planned: concurrent two-tier serving) ✅
 
 *Repurposed from the original "Quantized Model Serving with vLLM" block. This is the delegation architecture from Week 12 made real: 31B orchestrator and 2×12B sub-agents running concurrently as three independent services on the four-GPU box, fronted by a single endpoint. It also revives the nginx/reverse-proxy work deferred as a side-quest in Week 10 (`inference-reference-stack`) — now load-bearing rather than busywork, because the two-worker sub-agent tier gives the reverse proxy an actual job.*
 
@@ -181,15 +181,34 @@
 - **Observability across both tiers:** extend the Week 10 Prometheus/Grafana stack to cover all three services — per-tier KV usage, latency, throughput — so interference is visible.
 - **Deliverable:** a working two-tier orchestrator/sub-agent deployment with a single endpoint, the routing-approach decision documented, and concurrent-interference measurements. This is the operational proof that completes the delegation-architecture arc started in Week 11 — and, if it holds, the evidence behind the architecture Pulse held since Week 11.
 - **Models tested:** Gemma 4 31B Dense FP8 (orchestrator) + 2× Gemma 4 12B-QAT (sub-agents), concurrent.
+- **Outcome (Week 13 complete):** the week ran primarily as a **two-tier QAT quality-characterization** effort rather than the planned concurrent-serving/interference study. Version convergence landed first — both tiers moved onto a single pinned `vllm/vllm-openai:v0.23.0` image, retiring the Week-12 two-build split, the source-patched launcher, and the QAT load workarounds (the `patch_dense` fix is upstream; QAT loads clean with quantization genuinely active on the Marlin WNA16 kernel). On that converged stack, **QAT W4A16 was characterized against the BF16 parent at both tiers** (31B orchestrator Day 8, 12B workers Day 9) across both worker components (payment-service, order-service): quality-equivalent throughout — guardrail adherence an 8/8 tie at the orchestrator, pointwise 4.83–5.0 at the workers, format conformance 6/6. Built the evaluation toolchain (`rca_quality_judge.py` — position-bias-controlled pairwise + pointwise judge; `rca_quality_probe.py`; `worker_contract_check.py`; `vllm-bringup-checks.sh`) and ran the QAT-vs-FP8 throughput benchmark (QAT decode +36–50%). Published the LLM-as-judge quality-methodology LinkedIn Pulse. This **pulled a focused slice of the Week-24 quality work forward** — deployment-equivalence of QAT vs parent, distinct from the broad quant-fidelity curve that remains in Week 24.
+- **Carried to Week 14:** the concurrent stack runs, but nginx load-balancing is broken (8/0 worker distribution, diagnosed not fixed), and the cross-tier interference characterization + the architecture write-up (the operational proof of the delegation architecture) remain — they become Week 14's nginx-fix and architecture-write-up items.
+- **Headline finding:** QAT W4A16 is quality-equivalent to the BF16 parent at both tiers and production-ready.
+- **Journals:** Day 8 (31B BF16-vs-QAT), Day 9 (12B worker-component quality, both components).
 
-### Week 14: Speculative Decoding & KV Cache Compression
+### Week 14: Phase 3 close-out — repo maintenance, operational proof & throughput characterization
+
+*A loose-ends / consolidation week closing Phase 3: finish the delegation-architecture operational proof carried from Week 13, put the toolchain and repo in order, and characterize the worker tier's parallelism options. Cadence note: Week 14 switches session naming from `dayN` to `sessionN`.*
+
+- **Repo maintenance (Session 1).** Split the toolchain — and the eval inputs (prompts, probes, rubrics), which move with it — into a new public repo `T` (`rtx3090-ai-training-tools`); the current repo stays public as `R` (results, journals, captures). Putting the inputs in T means T's SHA pins code + inputs together. Dissolves the results-dirty-the-tools provenance friction at the root — supersedes the auto-commit and path-classifier ideas explored in Week 13, both dropped. **Crux:** the capture / judge / check tools must record **T's** commit, not the working directory's (post-split that's R), or the problem relocates. Also **reorganize R** for consistency — the weekly reports are currently split between `docs/weekly-reports/` and `phase3-…/week-N/`; consolidate to one convention. Start the session with a full recursive listing of R to plan the reorg.
+- **nginx load balancing.** The `zone workers 64k;` fix + balance re-probe (the diagnosed 8/0 worker distribution → balanced); nginx directory-mount so `reload` survives git's inode swap. This unblocks the **architecture write-up** — the delegation-architecture operational proof held since Week 11 — whose load-balance claim waits on a re-probe showing balanced distribution.
+- **Throughput Pulse.** The QAT-vs-FP8 decode advantage (+36–50%) with the context-headroom hook — "everyone checks whether the weights fit; nobody checks how much context fits beside them." Tables built as ASCII inside fenced code blocks (Pulse does not render Markdown tables).
+- **12B-QAT parallelism throughput sweep.** Characterize the 12B QAT worker at **TP=2, TP=1, and PP=2** — the worker-tier deployment decision (one card vs two, and TP vs PP on it), complementing the Week-11 31B parallelism characterization at the smaller tier.
+- **Deliverable:** the toolchain in its own public repo with a reorganized results repo; balanced two-tier serving plus the architecture write-up completing the delegation-architecture arc; the throughput Pulse; and a 12B-QAT parallelism characterization.
+- **Models tested:** Gemma 4 12B-QAT (parallelism sweep); the converged two-tier stack (nginx balance re-probe).
+
+### Week 15: Speculative Decoding & KV Cache Compression
+
+*Shifted from Week 14 when Week 14 was repurposed to the Phase-3 close-out.*
 
 - Implement speculative decoding with a draft model (Llama 3.2 1B → 3B)
 - Measure acceptance rate, latency improvement, and throughput impact
 - KV cache compression techniques: sliding window, prefix caching
 - **Deliverable:** Speculative decoding analysis with acceptance rate breakdown
 
-### Week 15: NSight Profiling & Bottleneck Analysis
+### Week 16: NSight Profiling & Bottleneck Analysis
+
+*Shifted from Week 15 when Phase 3 expanded to six weeks.*
 
 - Profile inference workloads with NVIDIA NSight Systems and NSight Compute
 - Identify compute vs memory bandwidth bottlenecks at the kernel level
@@ -198,32 +217,32 @@
 
 ---
 
-## Phase 4: Production Systems (Weeks 16-19)
+## Phase 4: Production Systems (Weeks 17-20)
 
 *Goal: Build complete production-grade AI systems*
 
-### Week 16: RAG Pipeline — Retrieval Infrastructure
+### Week 17: RAG Pipeline — Retrieval Infrastructure
 
 - Build GPU-accelerated semantic search with FAISS
 - Embedding pipeline: batch encoding, index construction, similarity search
 - Benchmark retrieval latency vs index size
 - **Deliverable:** Working vector search system with throughput benchmarks
 
-### Week 17: RAG Pipeline — Generation & Evaluation
+### Week 18: RAG Pipeline — Generation & Evaluation
 
 - Integrate retrieval with vLLM generation end-to-end
 - Measure end-to-end latency: retrieval + generation
 - Evaluate answer quality with and without retrieval context
 - **Deliverable:** Complete RAG system with latency and quality measurements
 
-### Week 18: Multi-Model Routing & Orchestration
+### Week 19: Multi-Model Routing & Orchestration
 
-- Build request router: classify query complexity, route to 3B vs 14B model
+- Build request router: classify query complexity, route to the larger vs smaller model (currently the Gemma 4 31B orchestrator and 12B worker; the specific pair may change by then)
 - Measure routing accuracy and latency overhead
 - Cost modeling: savings from routing vs single large model
 - **Deliverable:** Adaptive routing system with cost analysis
 
-### Week 19: Production Hardening
+### Week 20: Production Hardening
 
 - Request queuing, timeout handling, graceful degradation under overload
 - Health checks, circuit breakers, retry logic
@@ -232,32 +251,32 @@
 
 ---
 
-## Phase 5: Operations & Cost Modeling (Weeks 20-23)
+## Phase 5: Operations & Cost Modeling (Weeks 21-24)
 
 *Goal: Build production operations and cost modeling capabilities*
 
-### Week 20: Infrastructure Cost Modeling
+### Week 21: Infrastructure Cost Modeling
 
 - Build TCO calculator for this hardware configuration
 - Compare on-premise (4x RTX 3090) vs cloud alternatives (Lambda Labs, RunPod, AWS)
 - Break-even analysis across usage patterns and model sizes
 - **Deliverable:** Cost modeling framework with measured data from this hardware
 
-### Week 21: Capacity Planning Framework
+### Week 22: Capacity Planning Framework
 
 - Model throughput, memory, and latency constraints together
 - Capacity planning under uncertainty: traffic spikes, model updates
 - SLA definition and measurement: p99 latency budgets, error rate targets
 - **Deliverable:** Capacity planning guide for LLM serving systems
 
-### Week 22: Full Observability Stack
+### Week 23: Full Observability Stack
 
 - Deploy Prometheus + Grafana dashboards for all active serving infrastructure
 - Track SLA-relevant metrics (p50/p95/p99 latency, throughput, error rates)
 - Simulate failure scenarios and recovery
 - **Deliverable:** Production monitoring dashboard and reliability playbook
 
-### Week 23: Latency-Quality Tradeoff Framework (incl. quantization quality degradation)
+### Week 24: Latency-Quality Tradeoff Framework (incl. quantization quality degradation)
 
 - Document how quantization, batching, caching, and model size affect user experience
 - **Quantization quality degradation** (folded in from the original Week 12): systematic measurement of how lower-bit models degrade — perplexity, generation coherence, task accuracy — across AWQ/GPTQ/FP8 at INT4/INT8 vs higher-fidelity baselines. This is the one piece of the original quantization weeks worth keeping: not deployment-performance (already covered by the Gemma work in Weeks 8/9/11), but the *qualitative* fidelity cost of going to fewer bits, which the operating principle ("run the highest fidelity that fits") makes a deliberate, measured tradeoff rather than a default
@@ -266,7 +285,7 @@
 
 ---
 
-## Phase 6: Capstone & Portfolio (Weeks 24-27)
+## Phase 6: Capstone & Portfolio (Weeks 25-28)
 
 *Goal: Demonstrate end-to-end capability*
 
@@ -309,16 +328,20 @@
 | Week 11: Quantization methods (AWQ, GPTQ) | Week 11: TP vs PP comparison on Gemma 4 31B Dense FP8 | The parallelism-strategy thread (Week 3 → 7 → 8 Day 2 → 9 Day 2 paused) now has its closing chapter accessible thanks to the HMA fix in vLLM 0.21.0. Quantization methods (originally Week 11) moves to Week 12 |
 | Phase 3 starts at Week 9 | Phase 3 starts at Week 11 | 2-week shift accommodates the Gemma 4 work in Weeks 8-9 and the inference-stack work in Week 10 |
 | Phase 3 = 4 weeks (originally Weeks 9-12) | Phase 3 = 5 weeks (Weeks 11-15) | One additional week to fit the parallelism-strategy closing chapter alongside the original quantization/profiling content |
-| Week 11-12: Custom CUDA Kernels | Week 14: Speculative decoding + KV cache compression, Week 15: NSight profiling | More production-relevant than writing custom kernels from scratch |
+| Week 11-12: Custom CUDA Kernels | Week 15: Speculative decoding + KV cache compression, Week 16: NSight profiling | More production-relevant than writing custom kernels from scratch (originally Weeks 14-15; shifted +1 by the Week-14 close-out) |
 | Week 12: Quantization Methods (AWQ, GPTQ) — quality measurement | Week 12: Sub-agent tier validation & the delegation architecture | Quantization-as-deployment-baseline already established across Weeks 8/9/11 (AWQ on Ampere, HMA KV savings, FP8); operating principle is highest-fidelity-that-fits, not quant-vs-quant perf. Week 11's max-MML work showed no single config serves the interactive use case, motivating a tiered orchestrator/sub-agent architecture — Week 12 validates the cheap (12B) tier, gated on the `gemma4_unified` vLLM-version investigation |
 | Week 13: Quantized Model Serving with vLLM | Week 13: The delegation architecture, operational — concurrent two-tier serving | Repointed to the concrete system: 31B orchestrator + 2×12B sub-agents running concurrently behind one nginx endpoint. Revives the nginx/reverse-proxy work deferred as a Week 10 side-quest, now load-bearing. The two-tier interference characterization is the operational proof of the architecture |
-| (quantization quality measurement) | Folded into Week 23 (Latency-Quality Tradeoff Framework) | The one part of the original quantization weeks still wanted — qualitative fidelity degradation at lower bit-widths — belongs with the existing latency-quality framework (which already covered quantization's UX effect), removing a redundancy rather than creating a standalone week |
+| (quantization quality measurement) | Folded into Week 24 (Latency-Quality Tradeoff Framework) | The one part of the original quantization weeks still wanted — qualitative fidelity degradation at lower bit-widths — belongs with the existing latency-quality framework (which already covered quantization's UX effect), removing a redundancy rather than creating a standalone week. Week 13 separately pulled a *focused* slice forward (QAT-vs-parent deployment-equivalence), distinct from this broad quant-fidelity curve |
 | Phase 5: Separate PM track | Phase 5: Integrated operations + cost modeling | Cost modeling benefits from having all benchmark data in hand |
 | 24-week program | **27-week program** | The four-day Gemma 4 arc, the Week 9 continuation, and the parallelism-strategy closing chapter in Week 11 extend the timeline by three weeks; later phases preserved at original length rather than compressed |
+| Week 13: concurrent two-tier serving (operational proof) | Week 13: two-tier QAT quality characterization (BF16-vs-QAT, both tiers); operational-proof remainder (nginx balance + architecture write-up) carried to Week 14 | The converged-stack work landed, but the week's center of gravity became the quality question (is QAT lossless vs the parent?), pulling a focused slice of the Week-24 quality work forward; the interference/nginx proof carries forward rather than being dropped |
+| Week 14: Speculative Decoding & KV Cache Compression | Week 14: Phase-3 close-out (repo split + reorg, nginx load-balancing, throughput Pulse, 12B-QAT TP/PP sweep) | Loose ends accumulated through Phase 3 — the toolchain/results repo commingling, the deferred nginx balance fix, the held throughput Pulse, and the un-characterized worker-tier parallelism — warrant a consolidation week before profiling |
+| Phase 3 = 5 weeks (Weeks 11-15) | Phase 3 = 6 weeks (Weeks 11-16) | The close-out week (Week 14) adds one week; speculative decoding → Week 15, NSight → Week 16. Downstream phases (4–6) shift +1 |
+| 27-week program | **28-week program** | The Phase-3 close-out week (Week 14) extends the timeline by one; later phases preserved at original length |
 
 ---
 
 *Training started: January 13, 2026*
-*Current status: Phase 2 complete (Week 10 partial — side-quest); Week 11 complete (TP-vs-PP + max-MML); Week 12 complete (sub-agent tier validated, 12B QAT shipped at MML 131,072); beginning Week 13 (concurrent two-tier deployment)*
+*Current status: Phase 2 complete (Week 10 partial — side-quest); Week 11 complete (TP-vs-PP + max-MML); Week 12 complete (sub-agent tier validated, 12B QAT shipped at MML 131,072); Week 13 complete (two-tier QAT quality characterization — QAT W4A16 ≡ BF16 parent at both tiers, production-ready); beginning Week 14 (Phase-3 close-out — repo maintenance, nginx balance, throughput, 12B-QAT parallelism sweep). Program now 28 weeks (Phase 3 → Weeks 11–16).*
 *Hardware: 4x RTX 3090 (96GB total), Gigabyte B650 Eagle AX, Ubuntu 24.04*
 *NVLink bridge: Installed (AORUS GeForce RTX NVLink, GPU0+GPU2, NV4)*
