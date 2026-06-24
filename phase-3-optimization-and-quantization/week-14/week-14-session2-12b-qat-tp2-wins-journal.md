@@ -95,16 +95,23 @@ live judge → verdicts.
 ### Hypothesis (recorded before measuring)
 
 Running the 12B QAT (W4A16) at TP=2 on the NVLink pair **improves** throughput vs TP=1, despite
-the model fitting comfortably on one GPU. Predicted separately:
+the model fitting comfortably on one GPU. The framing here is deliberate: the naive top-down view
+says TP=2 parallelizes the compute and "should" give 2×, which everyone accepts is unrealistic
+once the costs the napkin math ignores are paid. So the question was never *whether* TP=2 helps —
+a meaningful gain was expected — but *how much* of that theoretical 2× survives. That magnitude
+was genuinely unpredictable a priori, because it hinges on a tug-of-war we could not resolve
+without measuring. Predicted separately:
 
-- **Prefill (compute-bound):** TP=2 wins — TP splits the per-token matmul work. The easier bet.
-- **Decode (bandwidth-bound):** **TP=2 wins** — the harder, against-conventional-intuition call.
-  Conventional wisdom says TP hurts bandwidth-bound decode because of the per-token all-reduce.
-  The counter-argument: at TP=2 each card holds *half the weights*, so per-card per-token
-  bytes-read roughly halves and the two cards read in parallel. If that bandwidth saving beats
-  the all-reduce cost — cheap on the ~100 GB/s NVLink bridge — decode improves. The bet was that
-  it does. Expected the advantage, if real, to *strengthen with concurrency* as fixed costs
-  amortize.
+- **Prefill (compute-bound):** TP=2 wins — TP splits the per-token matmul work. The
+  more-confident leg: prefill is compute-bound, so splitting the matmul should pay off cleanly.
+- **Decode (bandwidth-bound):** **TP=2 wins, magnitude unknown.** Decode is the leg where the
+  tug-of-war is real. Two opposing forces: (in favor) at TP=2 each card holds *half the weights*,
+  so per-card per-token bytes-read roughly halves and the two cards read in parallel — a direct
+  bandwidth win, and decode is bandwidth-bound; (against) the per-token all-reduce TP adds, paid
+  every token, whose cost scales with interconnect speed. We expected the bandwidth saving to
+  win on the NVLink pair (cheap ~100 GB/s all-reduce), but had **no way to quantify the balance
+  in advance** — that is exactly what the measurement resolves. Expected the advantage, if the
+  saving dominates, to *strengthen with concurrency* as fixed costs amortize.
 
 ### Method
 
@@ -154,15 +161,19 @@ TP=2 gain over TP=1: c=1 decode **+47%**, c=1 prefill **+81%**, then aggregate *
 
 ### Findings
 
-**1. The decode prediction holds — decisively. TP=2 c=1 decode +47% (70.0 → 102.6).** This is the
-clean, contention-free test: at c=1 there is no batching to mask anything, so it is the per-token
-weight-read vs all-reduce question in isolation. The bandwidth saving won. The +47% (rather than
-a naive ~2×) is *consistent with the mechanism*: weight-read is the dominant decode term but not
-the only one — KV-cache read, the all-reduce, and kernel-launch/scheduling floor don't halve, so
-they eat the gap to the +100% ceiling. A suspiciously-perfect 2× would have been *less* credible.
+**1. The tug-of-war resolves in favor of the bandwidth saving — TP=2 c=1 decode +47%
+(70.0 → 102.6).** c=1 is the clean, contention-free test: no batching to mask anything, so it is
+the halved-weight-read vs per-token all-reduce balance in isolation. The bandwidth saving won, and
+this is the number we could not predict in advance — the *magnitude* of the gain, which the
+a-priori reasoning could bound only loosely (more than zero, less than 2×). +47% is where it
+landed, and the value itself is informative about the mechanism: weight-read is the dominant decode
+term but not the only one — KV-cache read, the all-reduce, and kernel-launch/scheduling floor don't
+halve, so they consume the gap between the +47% measured and the +100% theoretical ceiling. The
+result is the answer to "how does the tug-of-war balance on NVLink," not a surprise that it
+balanced favorably at all.
 
 **2. Prefill prediction holds — TP=2 c=1 prefill +81% (2480 → 4500), near-perfect 1.8× scaling.**
-The easy bet; TP splits the matmul.
+The more-confident leg; prefill is compute-bound, TP splits the matmul.
 
 **3. The aggregate lead GROWS with concurrency (+61 → +67 → +72%) — the opposite of compression.**
 This is the second prediction (advantage strengthens with load) confirmed in the strong
@@ -225,3 +236,12 @@ toolchain is trusted end-to-end. Task 2 confirmed the hypothesis in the strong d
 (+47% c=1 decode, up to +72% aggregate), and the advantage grows with load.** PP=2 on the same
 cards buys almost nothing on decode-heavy serving — same two GPUs, same NVLink, opposite outcomes.
 The variable is the parallelism strategy, and the strategy that matches the bottleneck wins.
+
+## Additional activity — Pulse draft
+
+A LinkedIn Pulse post on this finding was drafted in the same session
+(`week-14-pulse-tp2-nvlink-decode-win.md`), pending review before publication. Framing: the
+gain was expected; the open question was its *magnitude*, gated on the halved-weight-read vs
+per-token all-reduce balance that could not be quantified before measuring — the +47% decode
+result is the resolution of that tug-of-war on the NVLink pair. Tabular data built as fenced
+ASCII (Pulse renders Markdown tables as literal text).
