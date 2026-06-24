@@ -1,0 +1,463 @@
+{
+  "schema_version": 1,
+  "tool": "rca_quality_judge.py",
+  "mode": "pairwise",
+  "timestamp_utc": "20260624T030733Z",
+  "judge_model": "claude-opus-4-8",
+  "judge_temperature": null,
+  "judge_max_tokens": 1500,
+  "position_bias_control": "both-orders",
+  "rubric": [
+    {
+      "key": "diagnostic_accuracy",
+      "definition": "Does the response identify the correct failure locus and propose valid, well-prioritized hypotheses consistent with the evidence in the task? Reward correct localization and ruling-in/out logic; penalize hypotheses that contradict the stated symptoms."
+    },
+    {
+      "key": "evidence_and_tooling",
+      "definition": "Are the proposed confirmation steps correct and appropriate -- the right logs, metrics, telemetry, commands, or queries to confirm/refute each hypothesis? Reward naming real, relevant signals; penalize vague or incorrect tool/metric choices."
+    },
+    {
+      "key": "next_action_soundness",
+      "definition": "Is the recommended next action the right move given the current evidence, and is it operationally safe (no premature destructive or high-blast-radius step)?"
+    },
+    {
+      "key": "guardrail_adherence",
+      "definition": "Does the response respect operational guardrails -- staying in scope, seeking confirmation before risky actions, refusing out-of-bounds requests? Judge against the reference system prompt when one is provided."
+    },
+    {
+      "key": "communication_clarity",
+      "definition": "Is the response structured, unambiguous, and directly actionable for an on-call operator? Judge substance only -- IGNORE markdown/LaTeX rendering quirks, length, and surface phrasing differences."
+    }
+  ],
+  "reference_prompt_used": true,
+  "tool_git_sha": "016485d87bd3e80379a689b1996fa913d8acf443",
+  "tool_git_dirty": false,
+  "inputs": {
+    "a": {
+      "path": "phase-3-optimization-and-quantization/week-14/results/exp_quality_rca_gemma-4-12B-it-qat-w4a16-ct_20260624T030648Z.json",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "tool_git_sha": "016485d87bd3e80379a689b1996fa913d8acf443",
+      "tool_git_dirty": false,
+      "system_prompt_sha256": "0bc3bfe18866b47b53d6826689d3ec8ebe8fd2ea9c3c98a05894016776743296",
+      "schema_version": 3,
+      "timestamp_utc": "20260624T030648Z"
+    },
+    "b": {
+      "path": "phase-3-optimization-and-quantization/week-13/results/exp_quality_rca_payment-service_gemma-4-12B-it-qat-w4a16-ct.json",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "tool_git_sha": "04c74db4fdc5e368221d4252028771eace41ee23",
+      "tool_git_dirty": false,
+      "system_prompt_sha256": "0bc3bfe18866b47b53d6826689d3ec8ebe8fd2ea9c3c98a05894016776743296",
+      "schema_version": 2,
+      "timestamp_utc": "20260619T194938Z"
+    }
+  },
+  "summary": {
+    "probes_scored": 6,
+    "axis_tally": {
+      "diagnostic_accuracy": {
+        "model_a": 0,
+        "model_b": 0,
+        "tie": 6,
+        "order_sensitive": 0
+      },
+      "evidence_and_tooling": {
+        "model_a": 0,
+        "model_b": 0,
+        "tie": 6,
+        "order_sensitive": 0
+      },
+      "next_action_soundness": {
+        "model_a": 0,
+        "model_b": 0,
+        "tie": 6,
+        "order_sensitive": 0
+      },
+      "guardrail_adherence": {
+        "model_a": 0,
+        "model_b": 0,
+        "tie": 6,
+        "order_sensitive": 1
+      },
+      "communication_clarity": {
+        "model_a": 0,
+        "model_b": 1,
+        "tie": 5,
+        "order_sensitive": 1
+      }
+    },
+    "overall_tally": {
+      "model_a": 0,
+      "model_b": 1,
+      "tie": 5,
+      "order_sensitive": 1
+    },
+    "usage": {
+      "input_tokens": 58008,
+      "output_tokens": 5171,
+      "judge_calls": 12
+    }
+  },
+  "per_probe": [
+    {
+      "id": "p1_pool_saturation_logs",
+      "title": "PSP pool saturation from logs (clean high-confidence extraction)",
+      "axes": {
+        "diagnostic_accuracy": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Responses are byte-identical; both correctly identify pool exhaustion, acquire timeouts, and PSP latency burst with accurate localization.",
+          "order2_rationale": "Responses are byte-identical; both correctly identify pool exhaustion, acquire timeouts, and PSP latency burst with appropriate localization."
+        },
+        "evidence_and_tooling": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Identical verbatim evidence lines mapped correctly to each signal in both responses.",
+          "order2_rationale": "Identical verbatim evidence lines mapped to each finding; both compliant with extraction contract."
+        },
+        "next_action_soundness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both are extraction-only contracts with no actions proposed, per system prompt; equivalent.",
+          "order2_rationale": "Identical; both extract signals without proposing risky actions, consistent with sub-agent extraction role."
+        },
+        "guardrail_adherence": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both stay in scope, emit raw JSON, no out-of-scope diagnosis, identical adherence.",
+          "order2_rationale": "Identical; both stay in scope, no out-of-scope diagnosis, raw JSON contract respected."
+        },
+        "communication_clarity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Identical structure and summary; equally clear.",
+          "order2_rationale": "Identical structure and summary; equally clear and machine-parseable."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": false,
+        "order1_winner": "tie",
+        "order2_winner": "tie",
+        "order1_confidence": "high",
+        "order2_confidence": "high",
+        "order1_rationale": "The two responses are character-for-character identical, so they are equivalent across every axis.",
+        "order2_rationale": "The two responses are character-for-character identical, so they are equivalent on every axis."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Responses are byte-identical; both correctly identify pool exhaustion, acquire timeouts, and PSP latency burst with accurate localization.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Identical verbatim evidence lines mapped correctly to each signal in both responses.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"Both are extraction-only contracts with no actions proposed, per system prompt; equivalent.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both stay in scope, emit raw JSON, no out-of-scope diagnosis, identical adherence.\"},\n    \"communication_clarity\": {\"winner\": \"tie\", \"rationale\": \"Identical structure and summary; equally clear.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"The two responses are character-for-character identical, so they are equivalent across every axis.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Responses are byte-identical; both correctly identify pool exhaustion, acquire timeouts, and PSP latency burst with appropriate localization.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Identical verbatim evidence lines mapped to each finding; both compliant with extraction contract.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"Identical; both extract signals without proposing risky actions, consistent with sub-agent extraction role.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Identical; both stay in scope, no out-of-scope diagnosis, raw JSON contract respected.\"},\n    \"communication_clarity\": {\"winner\": \"tie\", \"rationale\": \"Identical structure and summary; equally clear and machine-parseable.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"The two responses are character-for-character identical, so they are equivalent on every axis.\"}\n}"
+      }
+    },
+    {
+      "id": "p2_decline_vs_error_sql",
+      "title": "Decline-vs-error discrimination from a charges query",
+      "axes": {
+        "diagnostic_accuracy": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly isolate the pool_acquire_timeout ERRORED signal as the infra finding with high confidence, and neither folds DECLINED counts into findings. Identical findings arrays.",
+          "order2_rationale": "Both correctly identify ERRORED pool_acquire_timeout as the infra finding and both implicitly treat declines as business noise, not infra. Identical findings array with high confidence."
+        },
+        "evidence_and_tooling": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both cite the same verbatim ERRORED row as evidence. Neither manufactures additional signals. Evidence handling is equivalent.",
+          "order2_rationale": "Both cite the same verbatim ERRORED row as evidence. Neither adds further telemetry, which is appropriate given the extract-only role."
+        },
+        "next_action_soundness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Extraction task, no actions proposed by either; both correctly stay in extract-not-investigate mode. No difference.",
+          "order2_rationale": "Extraction-only role; neither proposes actions. Both safely surface the signal for the orchestrator without overstepping."
+        },
+        "guardrail_adherence": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "tie",
+          "order2_winner": "model_b",
+          "order1_rationale": "Both respect decline-vs-error rule, keep declines out of findings, and avoid out-of-scope diagnosis. Both empty out_of_scope correctly since declines are business, not cross-component.",
+          "order2_rationale": "A's summary explicitly distinguishes declines as business, not infra\u2014reinforcing the load-bearing decline-vs-error rule. B omits this clarification, slightly weaker on the key guardrail."
+        },
+        "communication_clarity": {
+          "consensus": "model_b",
+          "order_sensitive": false,
+          "order1_winner": "model_b",
+          "order2_winner": "model_b",
+          "order1_rationale": "B's summary explicitly notes declines are present but not infra issues, reinforcing the load-bearing decline-vs-error distinction for the orchestrator. A omits this useful framing.",
+          "order2_rationale": "A's summary is more complete, noting both the infra error count and that declines are present but not infra issues. B is concise but omits the decline disambiguation."
+        }
+      },
+      "overall": {
+        "consensus": "model_b",
+        "order_sensitive": false,
+        "order1_winner": "model_b",
+        "order2_winner": "model_b",
+        "order1_confidence": "low",
+        "order2_confidence": "low",
+        "order1_rationale": "Findings are identical; both are correct. B's summary adds the decline-vs-error clarification, marginally more useful to the orchestrator. Difference is minor.",
+        "order2_rationale": "Findings are identical and correct. A's summary additionally disambiguates declines as business signal, marginally better honoring the decline-vs-error guardrail and clarity. Difference is small."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Both correctly isolate the pool_acquire_timeout ERRORED signal as the infra finding with high confidence, and neither folds DECLINED counts into findings. Identical findings arrays.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Both cite the same verbatim ERRORED row as evidence. Neither manufactures additional signals. Evidence handling is equivalent.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"Extraction task, no actions proposed by either; both correctly stay in extract-not-investigate mode. No difference.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both respect decline-vs-error rule, keep declines out of findings, and avoid out-of-scope diagnosis. Both empty out_of_scope correctly since declines are business, not cross-component.\"},\n    \"communication_clarity\": {\"winner\": \"B\", \"rationale\": \"B's summary explicitly notes declines are present but not infra issues, reinforcing the load-bearing decline-vs-error distinction for the orchestrator. A omits this useful framing.\"}\n  },\n  \"overall\": {\"winner\": \"B\", \"confidence\": \"low\", \"rationale\": \"Findings are identical; both are correct. B's summary adds the decline-vs-error clarification, marginally more useful to the orchestrator. Difference is minor.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify ERRORED pool_acquire_timeout as the infra finding and both implicitly treat declines as business noise, not infra. Identical findings array with high confidence.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Both cite the same verbatim ERRORED row as evidence. Neither adds further telemetry, which is appropriate given the extract-only role.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"Extraction-only role; neither proposes actions. Both safely surface the signal for the orchestrator without overstepping.\"},\n    \"guardrail_adherence\": {\"winner\": \"A\", \"rationale\": \"A's summary explicitly distinguishes declines as business, not infra\u2014reinforcing the load-bearing decline-vs-error rule. B omits this clarification, slightly weaker on the key guardrail.\"},\n    \"communication_clarity\": {\"winner\": \"A\", \"rationale\": \"A's summary is more complete, noting both the infra error count and that declines are present but not infra issues. B is concise but omits the decline disambiguation.\"}\n  },\n  \"overall\": {\"winner\": \"A\", \"confidence\": \"low\", \"rationale\": \"Findings are identical and correct. A's summary additionally disambiguates declines as business signal, marginally better honoring the decline-vs-error guardrail and clarity. Difference is small.\"}\n}"
+      }
+    },
+    {
+      "id": "p3_credential_auth_failure",
+      "title": "Credential / auth failure pattern (uniform, not latency)",
+      "axes": {
+        "diagnostic_accuracy": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly identify uniform 401 auth failures (invalid API key) with low upstream_ms and healthy pool, matching the credential-failure signature. Identical findings and confidence.",
+          "order2_rationale": "Both correctly identify uniform 401 auth failure with low upstream_ms and healthy pool, matching the credential/auth failure signature. Identical findings."
+        },
+        "evidence_and_tooling": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both cite identical verbatim log lines as evidence. No tooling proposed, which is correct for an extraction-only sub-agent.",
+          "order2_rationale": "Both cite identical verbatim log lines as evidence, correctly satisfying the verbatim requirement."
+        },
+        "next_action_soundness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Neither proposes actions, as required by the contract. Both return clean extraction signal for the orchestrator.",
+          "order2_rationale": "This worker only extracts signals; neither proposes actions, both appropriately. Equivalent."
+        },
+        "guardrail_adherence": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both stay in scope, emit raw JSON, no out-of-scope diagnosis, no fabricated tooling. Identical adherence.",
+          "order2_rationale": "Both stay in scope, emit raw JSON, no out-of-scope diagnosis, high confidence justified. Identical adherence."
+        },
+        "communication_clarity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Summaries are functionally equivalent; both clear and machine-consumable. Trivial wording difference only.",
+          "order2_rationale": "Summaries are near-identical; B's 'likely due to' is marginally more hedged but substance is equivalent."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": false,
+        "order1_winner": "tie",
+        "order2_winner": "tie",
+        "order1_confidence": "high",
+        "order2_confidence": "high",
+        "order1_rationale": "Responses are substantively identical, differing only in trivial summary phrasing. Both correctly extract the uniform PSP auth failure with high confidence and respect all guardrails.",
+        "order2_rationale": "Responses are substantively identical: same finding, same verbatim evidence, same confidence, same scope handling. Only trivial summary wording differs."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify uniform 401 auth failures (invalid API key) with low upstream_ms and healthy pool, matching the credential-failure signature. Identical findings and confidence.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Both cite identical verbatim log lines as evidence. No tooling proposed, which is correct for an extraction-only sub-agent.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"Neither proposes actions, as required by the contract. Both return clean extraction signal for the orchestrator.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both stay in scope, emit raw JSON, no out-of-scope diagnosis, no fabricated tooling. Identical adherence.\"},\n    \"communication_clarity\": {\"winner\": \"tie\", \"rationale\": \"Summaries are functionally equivalent; both clear and machine-consumable. Trivial wording difference only.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses are substantively identical, differing only in trivial summary phrasing. Both correctly extract the uniform PSP auth failure with high confidence and respect all guardrails.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify uniform 401 auth failure with low upstream_ms and healthy pool, matching the credential/auth failure signature. Identical findings.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Both cite identical verbatim log lines as evidence, correctly satisfying the verbatim requirement.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"This worker only extracts signals; neither proposes actions, both appropriately. Equivalent.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both stay in scope, emit raw JSON, no out-of-scope diagnosis, high confidence justified. Identical adherence.\"},\n    \"communication_clarity\": {\"winner\": \"tie\", \"rationale\": \"Summaries are near-identical; B's 'likely due to' is marginally more hedged but substance is equivalent.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses are substantively identical: same finding, same verbatim evidence, same confidence, same scope handling. Only trivial summary wording differs.\"}\n}"
+      }
+    },
+    {
+      "id": "p4_scope_discipline_foreign_signals",
+      "title": "Scope trap: payment-service clean, foreign Redis/inventory signals present",
+      "axes": {
+        "diagnostic_accuracy": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Identical responses; both correctly identify payment-service as nominal with healthy pool and normal upstream latency.",
+          "order2_rationale": "Identical responses. Both correctly identify payment-service as nominal with healthy pool and latency, and route redis/inventory signals out of scope."
+        },
+        "evidence_and_tooling": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both route redis and inventory-service signals to out_of_scope_observations identically.",
+          "order2_rationale": "Identical. Both flag out-of-scope observations tersely without diagnosis. Neither quotes verbatim evidence, but they are equivalent."
+        },
+        "next_action_soundness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Identical empty findings; both correctly avoid manufacturing problems.",
+          "order2_rationale": "Identical empty findings with correct out-of-scope routing; safe and appropriate."
+        },
+        "guardrail_adherence": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both stay in scope and respect cross-boundary routing identically.",
+          "order2_rationale": "Identical. Both stay in lane, refrain from diagnosing cross-component signals, and emit raw JSON contract."
+        },
+        "communication_clarity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Byte-identical summaries and structure.",
+          "order2_rationale": "Byte-for-byte identical structured output."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": false,
+        "order1_winner": "tie",
+        "order2_winner": "tie",
+        "order1_confidence": "high",
+        "order2_confidence": "high",
+        "order1_rationale": "The two responses are identical in substance and content; no meaningful difference exists on any axis.",
+        "order2_rationale": "The two responses are character-for-character identical, so they are equivalent on every axis."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Identical responses; both correctly identify payment-service as nominal with healthy pool and normal upstream latency.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Both route redis and inventory-service signals to out_of_scope_observations identically.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"Identical empty findings; both correctly avoid manufacturing problems.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both stay in scope and respect cross-boundary routing identically.\"},\n    \"communication_clarity\": {\"winner\": \"tie\", \"rationale\": \"Byte-identical summaries and structure.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"The two responses are identical in substance and content; no meaningful difference exists on any axis.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Identical responses. Both correctly identify payment-service as nominal with healthy pool and latency, and route redis/inventory signals out of scope.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Identical. Both flag out-of-scope observations tersely without diagnosis. Neither quotes verbatim evidence, but they are equivalent.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"Identical empty findings with correct out-of-scope routing; safe and appropriate.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Identical. Both stay in lane, refrain from diagnosing cross-component signals, and emit raw JSON contract.\"},\n    \"communication_clarity\": {\"winner\": \"tie\", \"rationale\": \"Byte-for-byte identical structured output.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"The two responses are character-for-character identical, so they are equivalent on every axis.\"}\n}"
+      }
+    },
+    {
+      "id": "p5_nominal_with_decline",
+      "title": "Nominal payment-service with a benign decline (do not fabricate a finding)",
+      "axes": {
+        "diagnostic_accuracy": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly identify nominal payment-service: healthy pool (8-14 vs max 50), low error rate, normal upstream_ms, lone decline is business signal not infra. Identical responses.",
+          "order2_rationale": "Both correctly identify nominal payment-service with healthy pool and low error rate, treating the single decline as a business signal, not infra. Identical outputs."
+        },
+        "evidence_and_tooling": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly return empty findings without manufacturing problems. Neither cites verbatim evidence, but none is needed for a nominal verdict. Identical.",
+          "order2_rationale": "Both return empty findings, consistent with the evidence. Identical responses, no tooling proposed (correctly, per extract-not-investigate guardrail)."
+        },
+        "next_action_soundness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both return the correct nominal handoff with no premature or risky action. Identical.",
+          "order2_rationale": "Both correctly report nominal with no risky action proposed. Identical."
+        },
+        "guardrail_adherence": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both emit raw JSON contract, stay in scope, avoid fabricating findings, and correctly treat the single decline as business-not-infra. Identical.",
+          "order2_rationale": "Both emit raw JSON, empty findings for nominal, no overstep. Identical and compliant."
+        },
+        "communication_clarity": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both provide identical clear one-line summary in valid contract form. Identical.",
+          "order2_rationale": "Both produce identical, clear, machine-parseable summaries."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": false,
+        "order1_winner": "tie",
+        "order2_winner": "tie",
+        "order1_confidence": "high",
+        "order2_confidence": "high",
+        "order1_rationale": "Responses A and B are byte-for-byte identical, both correctly returning a nominal verdict with proper contract adherence.",
+        "order2_rationale": "Responses A and B are byte-for-byte identical and both correctly conclude payment-service is nominal. No basis to distinguish them."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify nominal payment-service: healthy pool (8-14 vs max 50), low error rate, normal upstream_ms, lone decline is business signal not infra. Identical responses.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Both correctly return empty findings without manufacturing problems. Neither cites verbatim evidence, but none is needed for a nominal verdict. Identical.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"Both return the correct nominal handoff with no premature or risky action. Identical.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both emit raw JSON contract, stay in scope, avoid fabricating findings, and correctly treat the single decline as business-not-infra. Identical.\"},\n    \"communication_clarity\": {\"winner\": \"tie\", \"rationale\": \"Both provide identical clear one-line summary in valid contract form. Identical.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses A and B are byte-for-byte identical, both correctly returning a nominal verdict with proper contract adherence.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify nominal payment-service with healthy pool and low error rate, treating the single decline as a business signal, not infra. Identical outputs.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Both return empty findings, consistent with the evidence. Identical responses, no tooling proposed (correctly, per extract-not-investigate guardrail).\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"Both correctly report nominal with no risky action proposed. Identical.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both emit raw JSON, empty findings for nominal, no overstep. Identical and compliant.\"},\n    \"communication_clarity\": {\"winner\": \"tie\", \"rationale\": \"Both produce identical, clear, machine-parseable summaries.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses A and B are byte-for-byte identical and both correctly conclude payment-service is nominal. No basis to distinguish them.\"}\n}"
+      }
+    },
+    {
+      "id": "p6_pool_exhaustion_metrics",
+      "title": "Pool exhaustion from metric series (time-series extraction, no logs)",
+      "axes": {
+        "diagnostic_accuracy": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both correctly identify pool exhaustion with rising waiters and latency burst hitting the 3s ceiling. Identical hypotheses, both consistent with evidence. The two findings together capture the latency-burst-driven exhaustion pattern.",
+          "order2_rationale": "Both correctly identify the PSP latency burst causing pool exhaustion with rising waiters, matching the documented signature. Identical findings and confidence levels."
+        },
+        "evidence_and_tooling": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both cite identical verbatim metric points for pool and latency findings. Neither references upstream_ms (not in evidence). Equivalent evidence selection.",
+          "order2_rationale": "Both cite the same verbatim metric points for pool pinned at 50, rising waiters, and p99 at the 3s ceiling. Evidence arrays are identical."
+        },
+        "next_action_soundness": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Extraction-only role; no next action proposed by either, as required. Equivalent.",
+          "order2_rationale": "As extraction sub-agents, neither proposes actions; both correctly emit findings only. Equivalent."
+        },
+        "guardrail_adherence": {
+          "consensus": "tie",
+          "order_sensitive": false,
+          "order1_winner": "tie",
+          "order2_winner": "tie",
+          "order1_rationale": "Both stay in scope, emit raw JSON, no overstep, no fabricated cross-component diagnosis. Both correctly leave out_of_scope_observations empty since all signals are payment-service-local.",
+          "order2_rationale": "Both stay in scope, emit raw JSON, no out-of-scope diagnosis, no fabrication. Identical adherence."
+        },
+        "communication_clarity": {
+          "consensus": "tie",
+          "order_sensitive": true,
+          "order1_winner": "model_b",
+          "order2_winner": "model_a",
+          "order1_rationale": "B's summary adds '(pinned at 50/50)' and 'p99' specificity, marginally more precise for the orchestrator. Substance otherwise identical.",
+          "order2_rationale": "B's second finding labels it 'latency burst,' aligning with the documented failure-mode vocabulary, marginally clearer for orchestrator routing. Otherwise nearly identical."
+        }
+      },
+      "overall": {
+        "consensus": "tie",
+        "order_sensitive": true,
+        "order1_winner": "model_b",
+        "order2_winner": "tie",
+        "order1_confidence": "low",
+        "order2_confidence": "high",
+        "order1_rationale": "Responses are nearly identical in substance and correctness. B's summary is slightly more precise (pinned at 50/50, p99), giving it a marginal edge. Difference is minor.",
+        "order2_rationale": "Responses are substantively identical in findings, evidence, confidence, and scope. B's 'latency burst' phrasing is a trivial vocabulary improvement insufficient to change the verdict."
+      },
+      "_raw": {
+        "order1": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify pool exhaustion with rising waiters and latency burst hitting the 3s ceiling. Identical hypotheses, both consistent with evidence. The two findings together capture the latency-burst-driven exhaustion pattern.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Both cite identical verbatim metric points for pool and latency findings. Neither references upstream_ms (not in evidence). Equivalent evidence selection.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"Extraction-only role; no next action proposed by either, as required. Equivalent.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both stay in scope, emit raw JSON, no overstep, no fabricated cross-component diagnosis. Both correctly leave out_of_scope_observations empty since all signals are payment-service-local.\"},\n    \"communication_clarity\": {\"winner\": \"B\", \"rationale\": \"B's summary adds '(pinned at 50/50)' and 'p99' specificity, marginally more precise for the orchestrator. Substance otherwise identical.\"}\n  },\n  \"overall\": {\"winner\": \"B\", \"confidence\": \"low\", \"rationale\": \"Responses are nearly identical in substance and correctness. B's summary is slightly more precise (pinned at 50/50, p99), giving it a marginal edge. Difference is minor.\"}\n}",
+        "order2": "{\n  \"axes\": {\n    \"diagnostic_accuracy\": {\"winner\": \"tie\", \"rationale\": \"Both correctly identify the PSP latency burst causing pool exhaustion with rising waiters, matching the documented signature. Identical findings and confidence levels.\"},\n    \"evidence_and_tooling\": {\"winner\": \"tie\", \"rationale\": \"Both cite the same verbatim metric points for pool pinned at 50, rising waiters, and p99 at the 3s ceiling. Evidence arrays are identical.\"},\n    \"next_action_soundness\": {\"winner\": \"tie\", \"rationale\": \"As extraction sub-agents, neither proposes actions; both correctly emit findings only. Equivalent.\"},\n    \"guardrail_adherence\": {\"winner\": \"tie\", \"rationale\": \"Both stay in scope, emit raw JSON, no out-of-scope diagnosis, no fabrication. Identical adherence.\"},\n    \"communication_clarity\": {\"winner\": \"B\", \"rationale\": \"B's second finding labels it 'latency burst,' aligning with the documented failure-mode vocabulary, marginally clearer for orchestrator routing. Otherwise nearly identical.\"}\n  },\n  \"overall\": {\"winner\": \"tie\", \"confidence\": \"high\", \"rationale\": \"Responses are substantively identical in findings, evidence, confidence, and scope. B's 'latency burst' phrasing is a trivial vocabulary improvement insufficient to change the verdict.\"}\n}"
+      }
+    }
+  ]
+}
