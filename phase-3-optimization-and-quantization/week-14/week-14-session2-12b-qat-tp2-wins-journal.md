@@ -239,9 +239,9 @@ The variable is the parallelism strategy, and the strategy that matches the bott
 
 ## Additional activity — Pulse draft
 
-A LinkedIn Pulse post on this finding was drafted in the same session
-(`week-14-pulse-tp2-nvlink-decode-win.md`), pending review before publication. Framing: the
-gain was expected; the open question was its *magnitude*, gated on the halved-weight-read vs
-per-token all-reduce balance that could not be quantified before measuring — the +47% decode
-result is the resolution of that tug-of-war on the NVLink pair. Tabular data built as fenced
-ASCII (Pulse renders Markdown tables as literal text).
+A LinkedIn Pulse post on this finding was drafted and **published** in the same session
+([link](https://www.linkedin.com/pulse/splitting-model-fits-one-card-what-tensor-parallelism-samuelson-5ejdc/)).
+Framing: the gain was expected; the open question was its *magnitude*, gated on the
+halved-weight-read vs per-token all-reduce balance that could not be quantified before measuring —
+the +47% decode result is the resolution of that tug-of-war on the NVLink pair. Tabular data built
+as fenced ASCII (Pulse renders Markdown tables as literal text).
