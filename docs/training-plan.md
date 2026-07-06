@@ -1,6 +1,6 @@
 # Training Plan: NVIDIA Inference Stack Mastery (Revised)
 
-*Last updated: June 22, 2026 — Weeks 12 and 13 complete. Week 13 ran as a two-tier QAT quality-characterization week (BF16-vs-QAT equivalence at both tiers via a position-bias-controlled LLM-as-judge harness) on a converged `vllm/vllm-openai:v0.23.0` image, rather than the originally-planned concurrent-serving/interference focus; the operational-proof remainder (nginx load-balancing fix + architecture write-up) carries into Week 14. Week 14 is repurposed from "Speculative Decoding" to a Phase-3 close-out / loose-ends week (repo split + reorg, nginx load-balancing, the throughput Pulse, and a 12B-QAT TP/PP throughput sweep). Speculative decoding shifts to Week 15 and NSight profiling to Week 16, extending Phase 3 to Weeks 11–16 and the program to 28 weeks (downstream phases shift +1). Quality-degradation measurement remains folded into the latency-quality week (now Week 24).*
+*Last updated: July 5, 2026 — **Conclusion revision**. The program concludes at 16 weeks. Weeks 15–16 are redefined from the speculative-decoding and NSight-profiling content to the program's two concluding weeks: Week 15 delivers the operational proof (cross-tier interference characterization + the delegation-architecture write-up) on the frozen v0.23.0 / 4×3090 production configuration; Week 16 consolidates and concludes (repo renames, journal consolidation, capstone summary, method Pulse). Phases 4–6 (Weeks 17–28) are dispositioned rather than executed — achieved in substance, migrated to the successor program, or deferred to a potential follow-on inference module — see the Disposition section and the Key Changes log.*
 
 ---
 
@@ -117,9 +117,9 @@
 
 ---
 
-## Phase 3: Optimization & Quantization (Weeks 11-16)
+## Phase 3: Optimization, the Delegation Architecture & Program Conclusion (Weeks 11-16)
 
-*Goal: Master parallelism strategies, then validate and operationalize the tiered delegation architecture that emerged from the Week 11 parallelism work. Phase 3 starts at Week 11 and runs 6 weeks. Weeks 12–13 were repurposed from the original quantization-methods content (rendered largely redundant by the Gemma deployment work in Weeks 8/9/11) to sub-agent-tier validation and two-tier QAT quality characterization; Week 14 is a Phase-3 close-out / loose-ends week. The originally-planned speculative-decoding and NSight content shifts to Weeks 15–16. The surviving quality-degradation measurement moved to Week 24.*
+*Goal: Master parallelism strategies, then validate and operationalize the tiered delegation architecture that emerged from the Week 11 parallelism work. Phase 3 starts at Week 11 and runs 6 weeks. Weeks 12–13 were repurposed from the original quantization-methods content (rendered largely redundant by the Gemma deployment work in Weeks 8/9/11) to sub-agent-tier validation and two-tier QAT quality characterization; Week 14 is a Phase-3 close-out / loose-ends week. Weeks 15–16, originally speculative decoding and NSight profiling, are redefined as the program's conclusion — the operational proof (Week 15) and the capstone consolidation (Week 16). Phase 3 is the program's final phase; the deferred optimization topics and the quality-degradation measurement are recorded in the Phase 4–6 disposition below.*
 
 ### Week 11: Parallelism Strategy Comparison — TP vs PP on Gemma 4 31B Dense FP8 ✅
 
@@ -197,110 +197,56 @@
 - **Deliverable:** the toolchain in its own public repo with a reorganized results repo; balanced two-tier serving plus the architecture write-up completing the delegation-architecture arc; the throughput Pulse; and a 12B-QAT parallelism characterization.
 - **Models tested:** Gemma 4 12B-QAT (parallelism sweep); the converged two-tier stack (nginx balance re-probe).
 
-### Week 15: Speculative Decoding & KV Cache Compression
+### Week 15: Operational Proof — Cross-Tier Interference Characterization & the Architecture Write-Up
 
-*Shifted from Week 14 when Week 14 was repurposed to the Phase-3 close-out.*
+*Redefined from "Speculative Decoding & KV Cache Compression" as the first of two concluding weeks. This is the one substantive measurement the program still owes itself: the proof that the two-tier box works as a **concurrent system**, not three configurations that each boot. The week runs on the frozen production configuration — 4× RTX 3090, pinned `vllm/vllm-openai:v0.23.0` — which is the exact state the Week 16 capstone will describe.*
 
-- Implement speculative decoding with a draft model (Llama 3.2 1B → 3B)
-- Measure acceptance rate, latency improvement, and throughput impact
-- KV cache compression techniques: sliding window, prefix caching
-- **Deliverable:** Speculative decoding analysis with acceptance rate breakdown
+- **Cross-tier interference characterization** (carried since Week 13): the three services share host RAM, the PCIe root complex, and CPU even though they occupy separate GPUs. Does orchestrator latency stay isolated while both 12B workers are saturated — and workers' while the orchestrator is under load? Regimes: per-tier isolated baselines, workers-saturated with orchestrator probe, orchestrator-loaded with worker probe, and full concurrent load through the nginx front door. Predictions committed per tier and regime before measurement, per methodology; prediction errors documented with mechanism.
+- **Delegation-architecture write-up, finalized**: the operational-proof section of the write-up requires this week's interference data, so whatever the Week 14 close-out advanced (the load-balance re-probe and draft), the write-up completes here with the concurrency evidence folded in. This closes the arc opened by Week 11's "neither config serves the use case" finding.
+- **Explicitly out of scope**: vLLM version changes, hardware changes, and any new optimization topics. (A vLLM 0.23→0.24 go/no-go was considered for this week and rejected — the engine upgrade consolidates with the hardware migration into the successor program's platform-revalidation prologue as one convergence event, regression-tested against the baselines this program freezes.)
+- **Deliverable:** interference characterization with committed predictions and per-tier results; the completed delegation-architecture write-up.
+- **Models tested:** the converged two-tier production stack — Gemma 4 31B-QAT orchestrator (TP=2, NVLink pair) + 2× Gemma 4 12B-QAT workers — on pinned v0.23.0.
 
-### Week 16: NSight Profiling & Bottleneck Analysis
+### Week 16: Program Conclusion — Renames, Journal Consolidation, Capstone & Method Pulse
 
-*Shifted from Week 15 when Phase 3 expanded to six weeks.*
+*Redefined from "NSight Profiling & Bottleneck Analysis" as the concluding week. The capstone is **declared, not built**: the two-tier delegation stack, validated for quality (Week 13) and concurrency (Week 15), is the program's capstone deliverable already in production form. The week is sequenced so every final document is written against final repo names and consolidated journals.*
 
-- Profile inference workloads with NVIDIA NSight Systems and NSight Compute
-- Identify compute vs memory bandwidth bottlenecks at the kernel level
-- Profile vLLM's PagedAttention and continuous batching kernel execution
-- **Deliverable:** Profiling report identifying top optimization opportunities
+1. **Repo renames (first, before any final document is drafted)**: the results repo → `inference-engineering-training`; the toolchain repo → `ai-training-tools`. The program's identity anchors to the role and the work, not the hardware that happened to run it. Mechanics: GitHub renames create permanent redirects for web links and git remotes, so published Pulses and the upstream vLLM issue reference keep resolving; update `git remote set-url` on both machines; grep all repos (including `inference-reference-stack`) for cross-references to the old names; never reuse the old names (reuse breaks the redirect). Historical journals keep whatever names they mention, per the never-rewrite rule — the redirects keep those references live. The rename is recorded in the capstone.
+2. **Journal consolidation**: create weekly summary journals for every week that lacks one (the weekly-summary pattern was only adopted late in the program) and a phase summary journal for each of the three phases. These are **additive** documents — daily journals are never rewritten or renamed. The phase summaries become the intermediate representation the capstone draws from.
+3. **Capstone summary**: a comprehensive program record written to the renamed results repo's `docs/` — the program's spine in one document, from Week 1's 5,000 tok/s transformers plateau to the quality-validated, concurrency-proven two-tier production architecture on converged v0.23.0. Written for the program's own record and for a future reader of the repo; too comprehensive for a Pulse by design.
+4. **Method Pulse**: a public post about structured AI-assisted self-training *as a method* — the program discipline (predict-before-measure, one experiment at a time, honest null results, journals never rewritten) and the public paper trail as evidence — deliberately distinct from the capstone's technical content. No tabular data anticipated, so the ASCII-table constraint is moot for this post.
+5. **Plan closure**: final Key Changes entries (recorded below) and the footer status update conclude this document as the program's record.
 
----
-
-## Phase 4: Production Systems (Weeks 17-20)
-
-*Goal: Build complete production-grade AI systems*
-
-### Week 17: RAG Pipeline — Retrieval Infrastructure
-
-- Build GPU-accelerated semantic search with FAISS
-- Embedding pipeline: batch encoding, index construction, similarity search
-- Benchmark retrieval latency vs index size
-- **Deliverable:** Working vector search system with throughput benchmarks
-
-### Week 18: RAG Pipeline — Generation & Evaluation
-
-- Integrate retrieval with vLLM generation end-to-end
-- Measure end-to-end latency: retrieval + generation
-- Evaluate answer quality with and without retrieval context
-- **Deliverable:** Complete RAG system with latency and quality measurements
-
-### Week 19: Multi-Model Routing & Orchestration
-
-- Build request router: classify query complexity, route to the larger vs smaller model (currently the Gemma 4 31B orchestrator and 12B worker; the specific pair may change by then)
-- Measure routing accuracy and latency overhead
-- Cost modeling: savings from routing vs single large model
-- **Deliverable:** Adaptive routing system with cost analysis
-
-### Week 20: Production Hardening
-
-- Request queuing, timeout handling, graceful degradation under overload
-- Health checks, circuit breakers, retry logic
-- Load testing: find failure modes and recovery behavior
-- **Deliverable:** Production-hardened inference service with reliability playbook
+The Parallel Learning Streams (below) conclude with the program; the knowledge-map receives its final update as part of the capstone consolidation.
 
 ---
 
-## Phase 5: Operations & Cost Modeling (Weeks 21-24)
+## Disposition of Phases 4–6 (Weeks 17–28)
 
-*Goal: Build production operations and cost modeling capabilities*
+*The program concludes at Week 16. The written Phases 4–6 predate the delegation architecture; by Week 14 their substance was largely achieved ahead of the paper plan, and the remainder divides into work that migrates to the successor program and topics deferred to a potential future module. The original section texts are preserved in this file's git history; the disposition is recorded here and in the Key Changes log.*
 
-### Week 21: Infrastructure Cost Modeling
+**Achieved in substance by the delegation-architecture arc:**
+- **Week 19 (Multi-Model Routing & Orchestration)** — the two-tier delegation architecture *is* multi-model orchestration, running: 31B orchestrator + 2×12B workers behind one nginx endpoint, with the routing decision documented in Week 13. The application-side routing logic (query-complexity classification) migrates (below).
+- **Week 23 (Full Observability Stack)** — delivered by the `inference-reference-stack` Prometheus/Grafana/dcgm work (Week 10) extended across both tiers in Week 13.
+- **Weeks 25–28 (Capstone: "Enterprise Inference Platform")** — the two-tier production stack is the platform in substance: multi-model serving, observability, graceful degradation, single front door. Week 16 declares it as the capstone rather than rebuilding it to the original spec.
+- **Week 20 (Production Hardening) — partial** — graceful degradation and overload behavior were measured in Weeks 4–5; health checking exists in the bring-up tooling. The remainder (circuit breakers, retry logic, failover) migrates.
 
-- Build TCO calculator for this hardware configuration
-- Compare on-premise (4x RTX 3090) vs cloud alternatives (Lambda Labs, RunPod, AWS)
-- Break-even analysis across usage patterns and model sizes
-- **Deliverable:** Cost modeling framework with measured data from this hardware
+**Migrated to the successor program (`ai-engineering-training`):**
+- **Weeks 17–18 (RAG pipeline)** → the successor's knowledge-grounding phase.
+- **Week 19 (application-side routing logic)** → the successor's agents/orchestration phase.
+- **Week 20 (hardening remainder: failover, resilience)** → the successor's system-hardening phase.
+- **Week 24 (latency-quality tradeoff framework, incl. the broad quantization quality-degradation curve)** → the successor's evaluation work. (Week 13 already pulled the focused QAT-vs-parent equivalence slice forward.)
 
-### Week 22: Capacity Planning Framework
-
-- Model throughput, memory, and latency constraints together
-- Capacity planning under uncertainty: traffic spikes, model updates
-- SLA definition and measurement: p99 latency budgets, error rate targets
-- **Deliverable:** Capacity planning guide for LLM serving systems
-
-### Week 23: Full Observability Stack
-
-- Deploy Prometheus + Grafana dashboards for all active serving infrastructure
-- Track SLA-relevant metrics (p50/p95/p99 latency, throughput, error rates)
-- Simulate failure scenarios and recovery
-- **Deliverable:** Production monitoring dashboard and reliability playbook
-
-### Week 24: Latency-Quality Tradeoff Framework (incl. quantization quality degradation)
-
-- Document how quantization, batching, caching, and model size affect user experience
-- **Quantization quality degradation** (folded in from the original Week 12): systematic measurement of how lower-bit models degrade — perplexity, generation coherence, task accuracy — across AWQ/GPTQ/FP8 at INT4/INT8 vs higher-fidelity baselines. This is the one piece of the original quantization weeks worth keeping: not deployment-performance (already covered by the Gemma work in Weeks 8/9/11), but the *qualitative* fidelity cost of going to fewer bits, which the operating principle ("run the highest fidelity that fits") makes a deliberate, measured tradeoff rather than a default
-- Create decision framework for model selection (when to use 3B vs 7B vs 14B vs 70B, and at what quantization)
-- **Deliverable:** Model selection guide with measured data from this hardware, including a quality-vs-bits curve
+**Deferred to a potential follow-on inference-engineering module:** *(recorded as topics of continued interest, not commitments)*
+- Speculative decoding & KV cache compression (original Week 15 content).
+- NSight profiling & kernel-level bottleneck analysis (original Week 16 content).
+- **Week 21 (Infrastructure Cost Modeling)** and **Week 22 (Capacity Planning Framework)** — capacity fundamentals were partially covered in Weeks 1 and 4; the systematic frameworks remain wanted.
 
 ---
 
-## Phase 6: Capstone & Portfolio (Weeks 25-28)
+## What Follows
 
-*Goal: Demonstrate end-to-end capability*
-
-**Build one comprehensive project combining the engineering threads from earlier phases:**
-
-### "Enterprise Inference Platform"
-
-- Multi-model serving with automatic routing based on query complexity
-- GPU-accelerated semantic search for document retrieval
-- Cost tracking per request/tenant
-- Full observability stack with SLA monitoring
-- Admin dashboard showing utilization, costs, latency distribution
-- Production deployment with graceful degradation and auto-scaling
-
-**Deliverable:** Full documentation including technical architecture diagram, performance benchmarks, cost analysis, and demo.
+*This program's successor is `ai-engineering-training` — an AI-engineering program building toward an operator copilot for root-cause analysis over a distributed system, defined in its own plan document. Before its first phase, a **prologue outside the numbered phases** brings the platform to a revalidated state (for this hardware: GPU migration and a vLLM engine upgrade, smoke- and regression-tested against the baselines this program froze at v0.23.0/4×3090) and stands up the lab environment the new program trains against. The migrated topics above land in the successor's phases as noted.*
 
 ---
 
@@ -311,6 +257,8 @@
 - Read NVIDIA technical blogs and GTC talks (weekly, 1-2 hours)
 - Write technical blog posts about learnings (bi-weekly)
 - Review and update "AI Infrastructure Knowledge Map" (monthly)
+
+*The streams conclude with the program at Week 16.*
 
 ---
 
@@ -338,10 +286,16 @@
 | Week 14: Speculative Decoding & KV Cache Compression | Week 14: Phase-3 close-out (repo split + reorg, nginx load-balancing, throughput Pulse, 12B-QAT TP/PP sweep) | Loose ends accumulated through Phase 3 — the toolchain/results repo commingling, the deferred nginx balance fix, the held throughput Pulse, and the un-characterized worker-tier parallelism — warrant a consolidation week before profiling |
 | Phase 3 = 5 weeks (Weeks 11-15) | Phase 3 = 6 weeks (Weeks 11-16) | The close-out week (Week 14) adds one week; speculative decoding → Week 15, NSight → Week 16. Downstream phases (4–6) shift +1 |
 | 27-week program | **28-week program** | The Phase-3 close-out week (Week 14) extends the timeline by one; later phases preserved at original length |
+| Week 15: Speculative Decoding & KV Cache Compression | Week 15: Operational proof — cross-tier interference characterization + delegation-architecture write-up | The program concludes at 16 weeks (see below). The one measurement still owed is the interference characterization carried since Week 13; the architecture write-up's operational-proof section requires that data, so both close together. Speculative decoding / KV compression deferred to a potential follow-on inference module |
+| Week 16: NSight Profiling & Bottleneck Analysis | Week 16: Program conclusion — repo renames, journal consolidation, capstone summary, method Pulse | Concluding consolidation replaces further optimization depth; the capstone is declared (the validated two-tier stack), not built to the original Phase-6 spec. NSight deferred to a potential follow-on inference module |
+| Phases 4–6 (Weeks 17–28) | Dispositioned: achieved in substance / migrated to `ai-engineering-training` / deferred to a potential follow-on module | Written before the delegation architecture emerged. By Week 14 the two-tier stack had delivered the substance of routing (W19), observability (W23), and the capstone platform (W25–28). RAG, application-side routing, hardening remainder, and the quality-degradation curve migrate to the successor; cost modeling, capacity planning, and the optimization-depth topics defer |
+| Repos named `rtx3090-*` | Results repo → `inference-engineering-training`; toolchain repo → `ai-training-tools` | Program identity anchored to role and work rather than the hardware that ran it; executed early in Week 16 so all final documents carry final names; GitHub redirects preserve published links |
+| 28-week program | **16-week program** | The conclusion is declared with the capstone achieved in substance ahead of the paper plan. The successor program (`ai-engineering-training`), with a platform-revalidation + lab bring-up prologue outside its numbered phases, takes the migrated work |
 
 ---
 
 *Training started: January 13, 2026*
-*Current status: Phase 2 complete (Week 10 partial — side-quest); Week 11 complete (TP-vs-PP + max-MML); Week 12 complete (sub-agent tier validated, 12B QAT shipped at MML 131,072); Week 13 complete (two-tier QAT quality characterization — QAT W4A16 ≡ BF16 parent at both tiers, production-ready); beginning Week 14 (Phase-3 close-out — repo maintenance, nginx balance, throughput, 12B-QAT parallelism sweep). Program now 28 weeks (Phase 3 → Weeks 11–16).*
+*Current status: Weeks 1–13 complete; Week 14 (Phase-3 close-out) concluding. Weeks 15–16 defined above as the program's conclusion. Program finalized at 16 weeks (Phase 3 → Weeks 11–16; Phases 4–6 dispositioned — see Disposition section).*
 *Hardware: 4x RTX 3090 (96GB total), Gigabyte B650 Eagle AX, Ubuntu 24.04*
 *NVLink bridge: Installed (AORUS GeForce RTX NVLink, GPU0+GPU2, NV4)*
+*Successor: `ai-engineering-training` — see its plan for the platform-revalidation and lab bring-up prologue.*
