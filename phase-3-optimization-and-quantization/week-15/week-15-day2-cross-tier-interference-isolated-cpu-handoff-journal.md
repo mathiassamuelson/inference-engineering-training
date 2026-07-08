@@ -169,26 +169,33 @@ per-step host delay is a smaller fraction). R3 is also the **largest** cell in t
 
 ## Host-side corroboration (the mechanism)
 
-Per-core CPU from node-exporter/Prometheus over each loaded window, vs a pre-flood idle window:
+Per-logical-CPU utilization from node-exporter/Prometheus over each loaded window, vs a pre-flood
+idle window. The host is a **6-core / 12-thread** Ryzen 9600X; node-exporter enumerates the **12
+logical CPUs** (`cpu0`–`cpu11`, the SMT threads), so "cpu 6–9" below are logical CPUs, not
+physical cores, and the mean is taken across all 12:
 
-| window | mean core busy | busiest cores | softirq | MemAvailable |
+| window | mean busy (12 logical CPUs) | busiest logical CPUs | softirq | MemAvailable |
 |---|---|---|---|---|
 | idle reference | 1.0% | — | ~0.00% | 40.8 GiB |
-| R2 loaded | 41.1% | cores 6–9 ~60% | ~0.00% | 40.8 GiB (swing 0.04) |
-| R3 loaded | 46.2% | cores 7–8 ~76% | ~0.00% | 40.7 GiB (swing 0.06) |
+| R2 loaded | 41.1% | cpu 6–9 ~60% | ~0.00% | 40.8 GiB (swing 0.04) |
+| R3 loaded | 46.2% | cpu 7–8 ~76% | ~0.00% | 40.7 GiB (swing 0.06) |
 
-Reads cleanly: host CPU rises 1% → 41–46% under load (system-time to 5–15% on the busy cores),
-**RAM dead flat**, **no core pegged** (max ~77%). Flat RAM rules out memory-bandwidth/pressure;
-unpegged cores with headroom explain why the victims stay isolated — the shared host resource is
-*loaded but not exhausted*, so per-token victim scheduling is never starved. R3's higher host
-load (46% vs 41%, +31B aggressor) tracks its marginally larger victim degradation — the coupling
-is real and monotone, just far below the 3% material line.
+Reads cleanly: mean logical-CPU busy rises 1% → 41–46% under load (system-time to 5–15% on the
+busiest threads), **RAM dead flat**, **no logical CPU pegged** (busiest ~77%). Flat RAM rules out
+memory-bandwidth/pressure; unsaturated CPU with headroom explains why the victims stay isolated —
+the shared host resource is *loaded but not exhausted*, so per-token victim scheduling is never
+starved. (SMT caveat: per-thread busy% does not sum to physical-core compute utilization, so the
+true physical-core headroom is if anything *smaller* than 12-thread mean suggests — but the
+qualitative conclusion, no thread pegged and load well short of saturation, is unaffected.) R3's
+higher host load (46% vs 41%, +31B aggressor) tracks its marginally larger victim degradation —
+the coupling is real and monotone, just far below the 3% material line.
 
 **Mechanism correction.** Day 1 named two channels: CPU-core contention **and**
 softirq/interrupt-rate (many small DMA completions from busy aggressor GPUs). Observed: the
 CPU-core/system-time channel is live; **the softirq channel is not** (softirq ~0.00% idle and
 loaded). The interference that exists is compute-scheduling handoff — tokenize/detokenize,
-sampling dispatch, SSE streaming, NCCL coordination sharing 6 cores — not interrupt handling.
+sampling dispatch, SSE streaming, NCCL coordination sharing the 6-core / 12-thread host — not
+interrupt handling.
 The *rate*-dependence prediction (signature decays with prompt size) still held; the specific
 resource was half wrong. Recorded as a resolution, not an edit to the committed journal.
 
