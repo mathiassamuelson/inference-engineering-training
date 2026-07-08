@@ -1,0 +1,162 @@
+{
+  "experiment": "cross_tier_interference",
+  "direction": "31b",
+  "timestamp_utc": "2026-07-08T03:08:40Z",
+  "git": {
+    "tool_git_sha": "88493e1c71fb282d172d4e17ea54238fd61510fb",
+    "tool_git_dirty": false
+  },
+  "victim": {
+    "model": "google/gemma-4-31B-it-qat-w4a16-ct",
+    "endpoint": "http://localhost:8000",
+    "gpus": [
+      0,
+      2
+    ],
+    "probe": "throughput_sweep.py c=1"
+  },
+  "aggressors": [
+    {
+      "url": "http://localhost:8080",
+      "model": "google/gemma-4-12B-it-qat-w4a16-ct",
+      "via_pool": true,
+      "requests_ok": 1342,
+      "requests_failed": 0,
+      "errors": {}
+    }
+  ],
+  "aggressor_config": {
+    "concurrency_per_target": 16,
+    "prompt_tokens_approx": 512,
+    "max_tokens": 256,
+    "ramp_seconds": 20.0,
+    "load_endpoint": "/v1/chat/completions (nonce-prefixed, APC-defeating)"
+  },
+  "placement": {
+    "victim": {
+      "gpus": [
+        0,
+        2
+      ],
+      "observed": {
+        "0": {
+          "uuid": "GPU-3a7eac76-25ae-edf8-eb11-d6b846ffb56f",
+          "used_mib": 23568
+        },
+        "2": {
+          "uuid": "GPU-8b223d02-aa0f-426b-470e-df5b3873d7ba",
+          "used_mib": 23568
+        }
+      },
+      "placement_ok": true
+    },
+    "aggressors": [
+      {
+        "gpus": [
+          1,
+          3
+        ],
+        "observed": {
+          "1": {
+            "uuid": "GPU-a7370cb3-24e2-9656-132e-a5b71fd76398",
+            "used_mib": 21260
+          },
+          "3": {
+            "uuid": "GPU-0da3bc5b-8e8b-16e7-8eee-5084ea3d2c82",
+            "used_mib": 21260
+          }
+        },
+        "placement_ok": true
+      }
+    ]
+  },
+  "loaded_window": {
+    "flood_start_epoch": 1783480120.993,
+    "victim_probe_start_utc": "2026-07-08T03:09:01Z",
+    "victim_probe_start_epoch": 1783480141.067,
+    "victim_probe_end_utc": "2026-07-08T03:14:57Z",
+    "victim_probe_end_epoch": 1783480497.618,
+    "flood_stop_epoch": 1783480497.618
+  },
+  "saturation_sample": {
+    "0": {
+      "util_pct": "0",
+      "mem_used_mib": "23568"
+    },
+    "1": {
+      "util_pct": "100",
+      "mem_used_mib": "21260"
+    },
+    "2": {
+      "util_pct": "0",
+      "mem_used_mib": "23568"
+    },
+    "3": {
+      "util_pct": "100",
+      "mem_used_mib": "21260"
+    }
+  },
+  "nginx_upstream_distribution": {
+    "127.0.0.1:8003": 680,
+    "127.0.0.1:8001": 663
+  },
+  "victim_sweep_file": "phase-3-optimization-and-quantization/week-15/results/interference_victim-gemma-4-31B-it-qat-w4a16-ct_31b-direction_victim-sweep.json",
+  "baseline_file": "phase-3-optimization-and-quantization/week-15/results/interference_solo_baseline_victim-gemma-4-31B-it-qat-w4a16-ct.json",
+  "victim_probe_rc": 0,
+  "diff_loaded_vs_solo": [
+    {
+      "prompt_size": 512,
+      "decode_tok_s": {
+        "solo": 66.02006751448418,
+        "loaded": 65.9850781579286,
+        "loaded_over_solo": 0.9995
+      },
+      "prefill_tok_s": {
+        "solo": 1958.2430051063461,
+        "loaded": 1913.0534744094848,
+        "loaded_over_solo": 0.9769
+      },
+      "ttft_s": {
+        "solo": 0.2622255465015769,
+        "loaded": 0.2683695966377854,
+        "loaded_over_solo": 1.0234
+      }
+    },
+    {
+      "prompt_size": 4096,
+      "decode_tok_s": {
+        "solo": 61.76882441181139,
+        "loaded": 61.69903755488928,
+        "loaded_over_solo": 0.9989
+      },
+      "prefill_tok_s": {
+        "solo": 1862.0766307401368,
+        "loaded": 1854.14719685172,
+        "loaded_over_solo": 0.9957
+      },
+      "ttft_s": {
+        "solo": 2.1948889177292585,
+        "loaded": 2.205443347617984,
+        "loaded_over_solo": 1.0048
+      }
+    },
+    {
+      "prompt_size": 49152,
+      "decode_tok_s": {
+        "solo": 44.457872387389166,
+        "loaded": 44.345191832690375,
+        "loaded_over_solo": 0.9975
+      },
+      "prefill_tok_s": {
+        "solo": 1140.3805247921898,
+        "loaded": 1134.3351427306202,
+        "loaded_over_solo": 0.9947
+      },
+      "ttft_s": {
+        "solo": 43.002017500065264,
+        "loaded": 43.232846604846415,
+        "loaded_over_solo": 1.0054
+      }
+    }
+  ]
+}
