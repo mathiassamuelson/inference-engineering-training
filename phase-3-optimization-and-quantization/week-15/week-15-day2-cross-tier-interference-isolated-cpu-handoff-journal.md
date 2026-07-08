@@ -244,3 +244,75 @@ resource was half wrong. Recorded as a resolution, not an edit to the committed 
   case."
 - **Week 16** — program conclusion (renames → consolidation → capstone → method Pulse), separate
   week / separate chat.
+
+---
+
+## Resolution — 2026-07-08: hardirq re-analysis + mechanism refinement
+
+*Appended per the never-rewrite convention. The Day-2 body above is unchanged; this entry adds,
+does not edit. Source: read-only re-pull, `interference_hardirq_reanalysis_2026-07-08.json`
+(same R2/R3/idle window bounds as the Day-2 per-core CPU table). Verdict and scorecard unchanged
+— this tightens the mechanism, not the result.*
+
+**Trigger.** Day 2 dismissed the interrupt-rate channel on `softirq ≈ 0.00%`. But GPU
+DMA-completion interrupts are serviced in **hardirq** (`node_cpu_seconds_total{mode="irq"}`),
+not softirq — so the channel Day 1 co-hypothesized was never actually measured. This pull reads
+the right series over the exact windows already captured.
+
+**Finding 1 — hardirq is nil and does not rise under load.** `irq` = 0.000% across all 12
+logical CPUs in all three windows (idle / R2 / R3). The reading is sound, not a query artifact:
+softirq returns real nonzero per-core values (~0.005–0.03%) from the same pull, so the pipeline
+resolves per-mode CPU correctly and `irq=0.000` is a true "below resolution floor" reading.
+`[measured]`
+
+*Register caveat (kept deliberately).* This measures interrupt **servicing time**, not interrupt
+**rate**. Near-zero hardirq time is the expected reading for modern MSI-X even under heavy
+interrupt load (each top-half is microseconds), so it disposes of interrupt-servicing *cost* as a
+coupling channel but does not — and these counters cannot — measure the DMA-completion *rate* the
+Day-1 hypothesis named. Correct disposition of that hypothesis is therefore
+**unsupported-and-unnecessary**, not "proven absent": host-CPU contention already fully accounts
+for the observed ≤0.5% coupling, and interrupt servicing adds no measurable host CPU, so no
+interrupt-rate channel is needed to explain the data. `[interpreted]`
+
+**Finding 2 — the host coupling is userspace-dominated (refines Day 2's "system-time" label).**
+The busy rise decomposes ~85% user / ~15% system:
+
+```
+window        busy%   user%   system%   irq%   softirq%   MemAvail
+idle           1.10    0.49     0.20     0.00    0.006     40.8 GiB
+R2 loaded     45.24   37.53     7.47     0.00    0.005     40.8 GiB
+R3 loaded     49.60   43.66     5.74     0.00    0.004     40.7 GiB
+busiest cores: R2 → 6-9 (63-72%);  R3 → 7-8 (~80%)
+```
+
+The coupling channel is the runtime's own per-token **userspace** CPU work — Python scheduling
+loop, tokenize/detokenize, sampling dispatch, CUDA kernel launch, SSE streaming — contending
+across the shared 6 cores, with kernel/system scheduling the minor partner. Day 2's
+"compute-scheduling handoff" *description* was right; the "system-time" *shorthand* under-weighted
+the dominant (userspace) component. `[measured]` Secondary, consistent detail: R2 carries more
+system-time (nginx proxy socket path), R3 more user-time (direct 31B flood, heavier userspace per
+request) — coherent with the load paths, not load-bearing for the verdict. `[interpreted]`
+
+**Finding 3 — loaded-not-exhausted holds, monotone with aggressor count.** No logical CPU pegged
+(max 71.6% R2 / 80.2% R3); RAM flat (MemAvailable ~40.8 GiB, swing ≤0.06). R3's higher mean host
+load (49.6% vs 45.2%) tracks its marginally larger victim degradation — the coupling is real,
+monotone, and far below the 3% material line. This is why the tiers stay isolated: the shared
+host resource is loaded but not exhausted, so per-token victim scheduling is never starved.
+`[measured]`
+
+**Two non-numeric corrections folded in here (no new data required):**
+
+- **Operating-point relabel.** The empirical 31B-QAT KV ceiling is **193,837 tok** (Day-2 boot
+  log), not the Day-1 "~54K" figure (which was inaccurate, off by ~3.5×). **49,152 is a
+  large-context point (~25% of the 31B ceiling / ~13% of the 12B's), not "near-ceiling."** True
+  near-ceiling (150K+) is **extrapolated, not measured** — safe because decode degradation decays
+  monotonically (0.41→0.06% out to 49K) and the rate mechanism predicts continued decay, so the
+  deep-context regime can only be *more* isolated. `[interpreted]`
+- **Decay-claim softening.** R3's short-context decode signature (0.41% @512) sits ≈1× the 12B
+  decode run-to-run spread (≤0.38%). The decay-toward-ceiling shape is therefore **consistent
+  with** the rate mechanism, not a clean measurement of it. The isolation verdict (≈7× margin to
+  the 3% bar) is unaffected; the finer mechanism claim is suggestive at this resolution.
+  `[interpreted]`
+
+**Unchanged.** Isolation verdict (both tiers), the prediction scorecard, and the falsifiable
+commit (held on the clean decode signal, 0.06% @49152 < 0.41% @512) all stand.
