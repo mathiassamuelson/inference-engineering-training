@@ -3,7 +3,9 @@
 **Session type:** design / prediction (web chat). No measurement taken this session.
 **Substrate:** frozen production stack — 4× RTX 3090, pinned `vllm/vllm-openai:v0.23.0`
 (`sha256:6d8429e3…22ed8f`). 31B-QAT orchestrator TP=2 on GPUs 0+2 (NVLink pair, :8000);
-two 12B-QAT workers TP=1 on GPUs 1 and 3 (:8001, :8003); nginx front door (:8080);
+two 12B-QAT workers TP=1 on GPUs 1 and 3 (:8001; worker2 :8003 as `start-stack.sh` boots it
+and as the probe floods it — known drift vs. the `start-vllm.sh`/CLAUDE.md preset :8002,
+reconciled in Session 2 before the flood); nginx front door (:8080);
 irs-prometheus + node-exporter up.
 
 This session locks the experiment shape and commits the predictions the execution session
