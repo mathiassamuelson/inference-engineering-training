@@ -79,7 +79,7 @@ launch (no role and no `--model` prints usage and exits):
 ```
 orchestrator   31B-QAT  TP=2  GPUs 0,2 (NVLink pair)   port 8000  MML 131072  util 0.95
 worker1        12B-QAT  TP=1  GPU 1                    port 8001  MML 131072  util 0.90
-worker2        12B-QAT  TP=1  GPU 3                    port 8002  MML 131072  util 0.90
+worker2        12B-QAT  TP=1  GPU 3                    port 8003  MML 131072  util 0.90
 ```
 
 `start-stack.sh` (in T) boots the whole multi-tier stack (both workers + orchestrator, optionally
