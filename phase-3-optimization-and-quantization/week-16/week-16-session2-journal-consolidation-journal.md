@@ -65,5 +65,13 @@ Register work worth noting per document: Week 8 preserves both NVLink/PCIe predi
 1. **Week 15 weekly summary** — once Week 15's remaining work closes the week.
 2. **Phase 3 summary** — once Weeks 15–16 close; same convention (`phase-3-summary-<slug>-journal.md` in the phase directory).
 3. **Week 16 weekly summary** — at plan closure, per the session-open decision.
-4. **Standing tool fix (unchanged):** `start-stack.sh` stale orchestrator defaults (carried from Week 15 Day 2).
+4. **Standing tool fix (unchanged):** `start-stack.sh` stale orchestrator defaults (carried from Week 15 Day 2). *(Corrected below — already fixed in Session 1.)*
 5. **Next in the Week 16 sequence:** capstone summary to `docs/` (drawing on the phase summaries — Phase 3's must exist first), then the method Pulse, then plan closure.
+
+---
+
+## Correction — appended at session close (same day)
+
+*Appended per the never-rewrite convention; adds, does not edit.*
+
+Carry-forward 4 is wrong: the close-out check of T found its HEAD commit (`9801227`, Session 1) is titled "Week 16: rename repo in live docs + **fix start-stack.sh 31B defaults**" — the stale `MODEL_31B`/`MML_31B` fix already landed with the Session 1 rename work. It is **not** an open item. The pre-session gate note above ("remains an open tool fix") made the same error: T's clean tree was read as "fix not carried," when in fact the fix was already committed. Nothing else in this journal is affected.
