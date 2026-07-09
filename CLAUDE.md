@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is the **data** repository for an AI inference infrastructure training program — results,
 per-week journals, captured measurements, and the curriculum. It is one of two side-by-side repos:
 
-- **`rtx3090-ai-training`** (this repo, "R") — results, journals, captures, `docs/training-plan.md`.
-- **`rtx3090-ai-training-tools`** ("T") — the benchmarking/eval toolchain plus bundled eval inputs
+- **`inference-engineering-training`** (this repo, "R") — results, journals, captures, `docs/training-plan.md`.
+- **`ai-training-tools`** ("T") — the benchmarking/eval toolchain plus bundled eval inputs
   (prompts, probes, rubrics).
 
 Tools are versioned in T, **run from here (R)**, and write their results here. Do not add tools to
@@ -19,8 +19,8 @@ R, and never let a tool write its output into T.
 Check out both repos side by side. Run a tool from R so results land in R:
 
 ```bash
-cd ~/work/rtx3090-ai-training            # CWD = R (this repo)
-T=~/work/rtx3090-ai-training-tools       # T checkout
+cd ~/work/inference-engineering-training  # CWD = R (this repo)
+T=~/work/ai-training-tools                # T checkout
 
 python3 "$T/tools/throughput_sweep.py" --backend vllm-openai \
     --endpoint http://localhost:8000 \

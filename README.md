@@ -16,9 +16,9 @@ NVLink-paired, the other two on PCIe.
 This is the **data** repository — results, journals, and captures. The **toolchain** lives in a
 separate repo:
 
-- **[`rtx3090-ai-training`](https://github.com/mathiassamuelson/rtx3090-ai-training)** (this repo) —
+- **[`inference-engineering-training`](https://github.com/mathiassamuelson/inference-engineering-training)** (this repo) —
   results, per-week journals, captured measurements, and the training plan.
-- **[`rtx3090-ai-training-tools`](https://github.com/mathiassamuelson/rtx3090-ai-training-tools)** —
+- **[`ai-training-tools`](https://github.com/mathiassamuelson/ai-training-tools)** —
   benchmarking and evaluation tools, plus the bundled eval inputs (prompts, probes, rubrics).
 
 The split keeps outputs and code separate: tools are versioned in the tools repo, run from here,
@@ -29,8 +29,8 @@ and write their results here.
 Check out both repos side by side, and run tools **from this repo** so results land here:
 
 ```bash
-cd ~/work/rtx3090-ai-training                     # CWD = this (data) repo
-T=~/work/rtx3090-ai-training-tools                # the tools repo checkout
+cd ~/work/inference-engineering-training          # CWD = this (data) repo
+T=~/work/ai-training-tools                        # the tools repo checkout
 
 python3 "$T/tools/throughput_sweep.py" \
     --backend vllm-openai --endpoint http://localhost:8000 \
@@ -61,11 +61,11 @@ status page.
 
 ```bash
 # clone both repos side by side
-git clone https://github.com/mathiassamuelson/rtx3090-ai-training.git
-git clone https://github.com/mathiassamuelson/rtx3090-ai-training-tools.git
+git clone https://github.com/mathiassamuelson/inference-engineering-training.git
+git clone https://github.com/mathiassamuelson/ai-training-tools.git
 
 # set up this repo's environment (Phase-1 provisioning stack)
-cd rtx3090-ai-training
+cd inference-engineering-training
 ./setup.sh
 source ~/ai-inference/bin/activate
 ```
