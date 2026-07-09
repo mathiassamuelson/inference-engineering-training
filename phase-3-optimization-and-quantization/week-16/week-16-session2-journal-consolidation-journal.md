@@ -75,3 +75,9 @@ Register work worth noting per document: Week 8 preserves both NVLink/PCIe predi
 *Appended per the never-rewrite convention; adds, does not edit.*
 
 Carry-forward 4 is wrong: the close-out check of T found its HEAD commit (`9801227`, Session 1) is titled "Week 16: rename repo in live docs + **fix start-stack.sh 31B defaults**" — the stale `MODEL_31B`/`MML_31B` fix already landed with the Session 1 rename work. It is **not** an open item. The pre-session gate note above ("remains an open tool fix") made the same error: T's clean tree was read as "fix not carried," when in fact the fix was already committed. Nothing else in this journal is affected.
+
+## Second correction — appended after close (same day)
+
+*Appended per the never-rewrite convention; adds, does not edit.*
+
+Carry-forward 1 is resolved after all: the mid-session deferral of the Week 15 summary rested on Week 15 being unfinished, which was a mix-up — Week 15 closed at its Day 3 (both deliverables done); it is Week 16 that remains in flight. The Week 15 summary (`week-15-summary-cross-tier-interference-delegation-writeup-journal.md`, commit `18ccf8b`) was delivered in this session's reopened tail, bringing the session total to **seven** summary documents. The Phase 3 deferral (carry-forward 2) still stands on its own grounds: Week 16 is open, so the phase cannot be summarized yet.
