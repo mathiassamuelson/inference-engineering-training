@@ -154,3 +154,24 @@ summaries as `p1-summary` / `p2-summary`; `plan` = `docs/training-plan.md`;
 No career-transition framing anywhere. Markdown tables permitted (GitHub-rendered).
 
 **Filename:** `docs/program-capstone.md` (confirmed at the inventory review).
+
+---
+
+## Correction — appended during draft review (same session)
+
+*Appended per the never-rewrite convention; adds, does not edit. The capstone's final text governs.*
+
+**B4, scope tightened.** The inventory row is accurate as written (the 0.44× measurement, its
+device-placement cause, the 3B export OOM). During draft review, a legibility expansion of
+this claim in the capstone briefly asserted a *general root cause* — that the ONNX/TensorRT
+recipe fails LLMs because their shapes aren't fixed at compile time, unlike image classifiers
+it "reliably" speeds up. Neither leg is in the record: the week never investigated why a
+correctly device-placed engine would or wouldn't win (root cause of the slowness was pinned
+to device placement, full stop; the dynamic-ops attribution in the journal applies only to
+the *direct-export trace failure*), and no vision model was ever measured (the only
+non-LLM datapoint is a 1M-parameter toy network at 1.17×). Ruling: the general explanation is
+**unsupported-by-the-record as a root cause** and was removed from the draft. The capstone
+now states the three record-supported failure causes (device placement for the measured
+slowdown; the trace error the journal attributes to dynamic ops for the direct export; RAM
+exhaustion for the 3B export) and explicitly marks the counterfactual — whether a correctly
+placed TensorRT engine would have beaten PyTorch — as not investigated.
