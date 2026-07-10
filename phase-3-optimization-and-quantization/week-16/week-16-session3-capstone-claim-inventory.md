@@ -175,3 +175,20 @@ now states the three record-supported failure causes (device placement for the m
 slowdown; the trace error the journal attributes to dynamic ops for the direct export; RAM
 exhaustion for the 3B export) and explicitly marks the counterfactual — whether a correctly
 placed TensorRT engine would have beaten PyTorch — as not investigated.
+
+## Addition — appended during draft review (same session)
+
+*Appended per the never-rewrite convention; adds, does not edit.*
+
+**D15a (new; record + interpreted).** The worker tier ships as two independent single-GPU
+instances, not as a TP=2 worker, despite D15's finding that TP=2 wins per-model. Grounds:
+(a) *derived arithmetic on D15's measured numbers* — two independent cards at the measured
+single-card aggregate (2 × 112.4 tok/s at c=8) exceed one TP=2 pair's aggregate (193.3
+tok/s); the Week 14 Session 2 journal does not draw this comparison explicitly, so it is
+tagged interpreted-from-measured, not measured; (b) *record* — the box has one NVLink bridge
+(GPUs 0+2), committed to the orchestrator's TP=2 (w11-summary §What it adds up to; arch
+§proof-case system); (c) *author rationale supplied at capstone review* — sacrificing the
+orchestrator's TP=2 was unacceptable, and purchasing a second bridge for hardware scheduled
+to retire would have been wasteful. The capstone states the decision and restates the
+production layout (orchestrator TP=2 on the NVLink pair; two independent workers on the x1
+cards) as the lead-in to Week 15.
