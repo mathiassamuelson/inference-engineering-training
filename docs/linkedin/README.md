@@ -11,8 +11,8 @@ Source markdown and publication index for LinkedIn articles written from this tr
 
 ### 2026-06-24 — Splitting a Model That Fits on One Card: What Tensor Parallelism Actually Buys You
 
-- **Source:** [week-14-pulse-tp2-nvlink-decode-win.md](./week-14-pulse-tp2-nvlink-decode-win.md)
-- **LinkedIn:** [week-14-pulse-tp2-nvlink-decode-win.md](https://www.linkedin.com/pulse/splitting-model-fits-one-card-what-tensor-parallelism-samuelson-5ejdc/)
+- **Source:** [2026-06-24-pulse-tp2-nvlink-decode-win.md](./2026-06-24-pulse-tp2-nvlink-decode-win.md)
+- **LinkedIn:** [2026-06-24-pulse-tp2-nvlink-decode-win.md](https://www.linkedin.com/pulse/splitting-model-fits-one-card-what-tensor-parallelism-samuelson-5ejdc/)
 - **Topics:** tensor parallelism (TP=2), pipeline parallelism (PP=2), NVLink, all-reduce / NCCL, Megatron-LM column/row split, decode bandwidth vs sync cost, 12B QAT (W4A16), RTX 3090, prefill vs decode throughput, concurrency scaling, interconnect dependence
 
 ### 2026-06-21 — Did 4-bit Quantization Quietly Make My Models Worse? Here's How I Actually Checked
