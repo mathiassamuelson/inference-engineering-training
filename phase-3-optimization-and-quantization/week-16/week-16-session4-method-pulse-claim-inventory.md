@@ -300,5 +300,29 @@ than specifies.
 
 ## Appended corrections
 
-*(none — corrections are appended below this line after commit, dated, never by editing the
-entries above)*
+**Correction 1 — 2026-07-15.** Restructure at author's direction after first review pass;
+three changes, no claim retractions:
+
+1. **Thesis emphasis.** The article's primary message is how AI partnership enables
+   structured self-training; the method principles become supporting material rather than
+   the spine. All existing claim licensing stands; Sections E and F move to the article's
+   center, Section D to a compact summary plus pointer.
+2. **New deliverable under this same inventory:** `R/docs/training-method.md` — a repo
+   document receiving the full method statement and the forged-by evidence (Sections D-1
+   through D-8, with their sources). The Pulse links it as it links the compendium. The
+   Pulse-specific depth constraints (D-3 depth constraint, I-9 no-measurement-values rule)
+   continue to bind the Pulse but do not bind the repo document, which follows normal repo
+   conventions: claims trace to journals; technical specifics and values are permitted with
+   citation.
+3. **Added claims (Pulse):**
+   - **E-4.** The training plan (`training-plan.md`) is the program's backbone document:
+     phased structure, session sequencing, and a Key Changes section recording amendments
+     across the program's life. `measured` — source: `training-plan.md` (incl. §Key
+     Changes). The plan's amendment history is citable as partnership-and-method evidence:
+     changes were recorded, not silently rewritten (consistent with D-4's discipline).
+   - **E-5.** The plan was designed and amended in dialogue between the author and Claude
+     across the program. `recollection` + `interpreted` for the co-design characterization
+     (the plan document records the amendments, not their authorship); the article states
+     this in first person, not as record.
+
+*(further corrections, if any, appended below — dated, never by editing the entries above)*
