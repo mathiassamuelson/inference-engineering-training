@@ -325,4 +325,25 @@ three changes, no claim retractions:
      (the plan document records the amendments, not their authorship); the article states
      this in first person, not as record.
 
+**Correction 2 — 2026-07-16.** Two items surfaced during the article review pass, batched per
+the session's standing decision; no retractions:
+
+1. **C-2/C-4 sharpened.** The committed C-2 wording ("the ability to discuss the domain, not
+   to debug it") overstated the pre-program position for the model layer specifically. As
+   corrected in review, the article asserts: pre-program conversational fluency covered ML
+   fundamentals and application-layer topics (per C-4's diagnosis); the model layer was not
+   merely undebuggable but largely unknown territory — tensor parallelism, cited in the
+   article, is one example of a model-layer concept the author had little or zero awareness
+   of before the program, not the sole gap. `recollection`, as before. C-2's domain-level
+   claim (and the title resting on it) stands; this narrows its application at the model
+   layer.
+2. **G-1 extended (new claim, Pulse).** Beyond G-1's committed accessibility facts, the
+   article additionally asserts: the six-year-old hardware remained supported by current
+   serving frameworks and the current model roster throughout the program, and where the
+   hardware's age imposed limitations (capabilities the silicon lacks), readily available
+   workarounds proved effective. `recollection + interpreted` for the assessment; the serving
+   stack and model roster running on this hardware end to end is program record throughout.
+   The article states this without naming specific formats or workarounds (depth consistent
+   with the Pulse's register).
+
 *(further corrections, if any, appended below — dated, never by editing the entries above)*
