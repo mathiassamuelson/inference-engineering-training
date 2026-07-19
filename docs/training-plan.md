@@ -291,11 +291,16 @@ The Parallel Learning Streams (below) conclude with the program; the knowledge-m
 | Phases 4–6 (Weeks 17–28) | Dispositioned: achieved in substance / migrated to `ai-engineering-training` / deferred to a potential follow-on module | Written before the delegation architecture emerged. By Week 14 the two-tier stack had delivered the substance of routing (W19), observability (W23), and the capstone platform (W25–28). RAG, application-side routing, hardening remainder, and the quality-degradation curve migrate to the successor; cost modeling, capacity planning, and the optimization-depth topics defer |
 | Repos named `rtx3090-*` | Results repo → `inference-engineering-training`; toolchain repo → `ai-training-tools` | Program identity anchored to role and work rather than the hardware that ran it; executed early in Week 16 so all final documents carry final names; GitHub redirects preserve published links |
 | 28-week program | **16-week program** | The conclusion is declared with the capstone achieved in substance ahead of the paper plan. The successor program (`ai-engineering-training`), with a platform-revalidation + lab bring-up prologue outside its numbered phases, takes the migrated work |
+| Week 16: method Pulse (public post on the method) | Session 4: article restructured around the AI-partnership thesis; `docs/training-method.md` added as a deliverable under the same claim inventory | Mid-session scope amendment at the author's direction (2026-07-15; recorded as Correction 1 of the Session 4 claim inventory). The full method statement and its forged-by evidence belong in a repo document following normal repo conventions — claims trace to journals, technical specifics permitted with citation — which the Pulse's depth constraints deliberately exclude; the Pulse links the repo document as it links the compendium |
 
 ---
 
 *Training started: January 13, 2026*
-*Current status: Weeks 1–13 complete; Week 14 (Phase-3 close-out) concluding. Weeks 15–16 defined above as the program's conclusion. Program finalized at 16 weeks (Phase 3 → Weeks 11–16; Phases 4–6 dispositioned — see Disposition section).*
+*Status: **Program concluded — July 18, 2026.** All 16 weeks complete (Phase 1 → Weeks 1–4;
+Phase 2 → Weeks 5–10; Phase 3 → Weeks 11–16; Phases 4–6 dispositioned — see Disposition
+section). Program record: `docs/program-capstone.md` (technical spine),
+`docs/training-method.md` (method), `docs/linkedin/README.md` (published articles).*
 *Hardware: 4x RTX 3090 (96GB total), Gigabyte B650 Eagle AX, Ubuntu 24.04*
 *NVLink bridge: Installed (AORUS GeForce RTX NVLink, GPU0+GPU2, NV4)*
-*Successor: `ai-engineering-training` — see its plan for the platform-revalidation and lab bring-up prologue.*
+*Successor: `ai-engineering-training` — see its plan for the platform-revalidation and lab
+bring-up prologue.*
