@@ -11,15 +11,18 @@ backs production serving decisions.
 **Hardware:** 4× NVIDIA RTX 3090 (96 GB total VRAM) · Ubuntu 24.04 · CUDA 12.x · two GPUs
 NVLink-paired, the other two on PCIe.
 
-## Two repositories
+## Three repositories
 
-This is the **data** repository — results, journals, and captures. The **toolchain** lives in a
-separate repo:
+This is the **data** repository — results, journals, and captures. The **toolchain** and the
+**deployment stack** live in separate repos:
 
 - **[`inference-engineering-training`](https://github.com/mathiassamuelson/inference-engineering-training)** (this repo) —
   results, per-week journals, captured measurements, and the training plan.
 - **[`ai-training-tools`](https://github.com/mathiassamuelson/ai-training-tools)** —
   benchmarking and evaluation tools, plus the bundled eval inputs (prompts, probes, rubrics).
+  The toolchain as it stood at this program's conclusion is tagged
+  [`v1.0.0`](https://github.com/mathiassamuelson/ai-training-tools/tree/v1.0.0); `main`
+  continues to evolve.
 - **[`inference-reference-stack`](https://github.com/mathiassamuelson/inference-reference-stack)** —
   the deployment stack (vLLM serving, nginx front door, Prometheus/Grafana/dcgm observability).
 
