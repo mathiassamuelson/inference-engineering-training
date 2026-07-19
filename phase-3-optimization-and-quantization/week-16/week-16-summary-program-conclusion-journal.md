@@ -1,10 +1,13 @@
 # Week 16 Summary — Program Conclusion
 
 **Week span:** 2026-07-08/09 → 2026-07-18 (five sessions; see the register note on the
-Session 1/2 dates below). **Sessions:** repo renames (S1) → journal consolidation (S2) →
-capstone (S3) → method Pulse (S4) → plan closure (S5).
-**Repos:** R (all document commits), T (one bundled tool fix, S1), IRS (rename
-cross-reference sweep only).
+Session 1/2 dates below). **Sessions:** repo renames (Session 1) → journal
+consolidation (Session 2) → capstone (Session 3) → method Pulse (Session 4) →
+plan closure (Session 5).
+**Repos:** R = [`inference-engineering-training`](https://github.com/mathiassamuelson/inference-engineering-training)
+(all document commits), T = [`ai-training-tools`](https://github.com/mathiassamuelson/ai-training-tools)
+(one bundled tool fix, Session 1), IRS = [`inference-reference-stack`](https://github.com/mathiassamuelson/inference-reference-stack)
+(rename cross-reference sweep only).
 **Measurements this week: none.** Week 16 was defined as the concluding consolidation week —
 repo maintenance and derived-document writing exclusively. This summary consolidates the five
 session journals; every claim traces to them.
@@ -65,8 +68,8 @@ that constraint — fixed to match the architecture doc's re-examination.
 the phase summaries as the capstone's intermediate representation; Phase 3's summary did not
 yet exist (Week 16 open), so the capstone's Phase 3 material cites the Week 11–15 weekly
 summaries directly, with dailies for spot-verification. Consistency with the Phase 3 summary
-(written in S5, after the capstone) is by construction — both trace to the same record.
-Judged immaterial and left off the plan's Key Changes log; the S3 journal is its trace.
+(written in Session 5, after the capstone) is by construction — both trace to the same record.
+Judged immaterial and left off the plan's Key Changes log; the Session 3 journal is its trace.
 
 ## Session 4 — the method Pulse (2026-07-15 → 2026-07-16)
 
@@ -94,22 +97,22 @@ unknown, not merely undebuggable) and extended the hardware-accessibility claim
 
 ## Session 5 — plan closure (2026-07-18)
 
-The concluding session, run in web chat under the S2 single-stop protocol — a tier decision
+The concluding session, run in web chat under the Session 2 single-stop protocol — a tier decision
 made deliberately at open: the method doc's "final derived documents" phrasing was read
-against the S2 precedent, and the full inventory contract was judged to govern public,
+against the Session 2 precedent, and the full inventory contract was judged to govern public,
 novel-synthesis documents (capstone, Pulse), not consolidation summaries, whose siblings all
-ran under the lighter protocol. The S5 journal records the reasoning.
+ran under the lighter protocol. The Session 5 journal records the reasoning.
 
-Delivered: the plan's final Key Changes row (the S4 scope amendment) and the footer rewrite
+Delivered: the plan's final Key Changes row (the Session 4 scope amendment) and the footer rewrite
 to concluded status — the footer replaced rather than appended-to, as a live status block
 whose history is in git, distinct from journals, which are never rewritten; this summary;
 and the Phase 3 summary (`phase-3-summary-<slug>-journal.md`). The inherited R-README
-routing check closes the last item carried from S4.
+routing check closes the last item carried from Session 4.
 
 ## Open at week close — carried beyond the program
 
 Nothing is carried to a Week 17; there is none. Threads recorded for the successor program
-or as unqueued options, per the S4 and S5 journals:
+or as unqueued options, per the Session 4 and Session 5 journals:
 
 - **Claude Cowork evaluation** as a predict-first surface-routing question for the successor
   program's Week 0 flavor of thinking (chat / Code / possibly Cowork as a three-way rule).
@@ -125,35 +128,37 @@ or as unqueued options, per the S4 and S5 journals:
 - **Commit the inventory before drafting, twice executed:** both final derived documents
   (capstone, Pulse) ran the full contract, and both accumulated post-commit appended
   corrections — the mechanism catching errors is the evidence it works, not a blemish.
-- **The correction flows from the record to the drafter:** S4's review caught the drafter's
-  characterizations exceeding the record three distinct times; S2's corrections caught the
+- **The correction flows from the record to the drafter:** Session 4's review caught the drafter's
+  characterizations exceeding the record three distinct times; Session 2's corrections caught the
   session's own state-tracking twice. Same direction every time.
 - **Live documents and the record are governed differently:** the plan's footer was replaced;
   journals and inventories only ever gain appended text. Keeping the two regimes distinct is
   what lets a "never rewrite" rule be absolute without freezing operational truth.
 - **Sequence renames before final documents:** every closing document carries the final repo
-  names because S1 came first — a one-session ordering decision that avoided a
+  names because Session 1 came first — a one-session ordering decision that avoided a
   program's-worth of stale references.
-- **Header dates need the same discipline as measurements:** the S1 and S2 journal headers
-  date consolidation (07-08) before the renames (07-09), while the S2 journal's own
-  correction proves S1's T commit preceded S2's close. See the register note below.
+- **Header dates need the same discipline as measurements:** the Session 1 and Session 2
+  journal headers date consolidation (07-08) before the renames (07-09), while the Session 2
+  journal's own correction proves Session 1's T commit preceded Session 2's close. See the
+  register note below.
 
 ## Register notes
 
 - Everything in this summary is record-class (decisions, deliverables, publications, plan
   changes) traceable to the five session journals and the two claim inventories; no
   measurement claims exist this week to tag.
-- **Session 1/2 date discrepancy, flagged not resolved:** the S2 header reads 2026-07-08;
-  the S1 header reads 2026-07-09; the sequence (renames first) and S2's first appended
-  correction (S1's commit `9801227` already in T's history at S2's close-out check) establish
-  the session order but not which header date is wrong. Per the never-rewrite rule the
-  resolution, if wanted, is an appended correction to the affected journal with the
-  git-derived date — the S2 precedent for undated journals applies. This summary states the
-  week span with the discrepancy visible rather than silently picking a date.
-- The S4 publication date (2026-07-16) and the S3 capstone commit (`96db8d6`) are stated
-  from the session journals; commit SHAs for S5's own deliverables are not yet known at
-  drafting time and are deliberately absent — the S5 session journal, written last, records
-  them.
+- **Session 1/2 date discrepancy, flagged not resolved:** the Session 2 header reads 2026-07-08;
+  the Session 1 header reads 2026-07-09; the sequence (renames first) and Session 2's first
+  appended correction (Session 1's commit `9801227` already in T's history at Session 2's
+  close-out check) establish the session order but not which header date is wrong. Per the
+  never-rewrite rule the resolution, if wanted, is an appended correction to the affected
+  journal with the git-derived date — the Session 2 precedent for undated journals applies.
+  This summary states the week span with the discrepancy visible rather than silently picking
+  a date.
+- The Session 4 publication date (2026-07-16) and the Session 3 capstone commit (`96db8d6`) are
+  stated from the session journals; commit SHAs for Session 5's own deliverables are not yet
+  known at drafting time and are deliberately absent — the Session 5 session journal, written
+  last, records them.
 
 ---
 
@@ -164,5 +169,5 @@ or as unqueued options, per the S4 and S5 journals:
 Session 5 delivered one item beyond the list above, decided after this summary was
 committed: T was tagged `v1.0.0` at its current HEAD — the toolchain frozen as of the
 program's conclusion — and R's README now links the tag alongside `main`. Recorded as a
-mid-session scope amendment in the Session 5 journal; closure work, in the S4 amendment's
+mid-session scope amendment in the Session 5 journal; closure work, in the Session 4 amendment's
 mold.

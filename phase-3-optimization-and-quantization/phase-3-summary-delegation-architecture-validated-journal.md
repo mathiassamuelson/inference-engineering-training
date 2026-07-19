@@ -99,7 +99,8 @@ What Week 13 could not yet claim was isolation under load; that became Week 15's
 ## Week 14 — the close-out week
 
 Inserted by the phase's own accumulated loose ends, and worth its week. The
-**toolchain/results repo split** (T carved out of R) dissolved the dirty-tree provenance
+**toolchain/results repo split** (`ai-training-tools`, T, carved out of
+`inference-engineering-training`, R) dissolved the dirty-tree provenance
 problem at its root rather than classifying around it — `provenance.py` anchoring the
 recorded SHA to the tool repo via `__file__`, so a capture run from R records T's commit.
 The **12B-QAT parallelism sweep** answered the worker tier's own layout question: TP=2 on
