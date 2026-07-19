@@ -20,6 +20,8 @@ separate repo:
   results, per-week journals, captured measurements, and the training plan.
 - **[`ai-training-tools`](https://github.com/mathiassamuelson/ai-training-tools)** —
   benchmarking and evaluation tools, plus the bundled eval inputs (prompts, probes, rubrics).
+- **[`inference-reference-stack`](https://github.com/mathiassamuelson/inference-reference-stack)** —
+  the deployment stack (vLLM serving, nginx front door, Prometheus/Grafana/dcgm observability).
 
 The split keeps outputs and code separate: tools are versioned in the tools repo, run from here,
 and write their results here.
