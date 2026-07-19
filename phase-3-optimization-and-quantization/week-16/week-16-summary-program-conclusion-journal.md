@@ -154,3 +154,15 @@ or as unqueued options, per the S4 and S5 journals:
   from the session journals; commit SHAs for S5's own deliverables are not yet known at
   drafting time and are deliberately absent — the S5 session journal, written last, records
   them.
+
+---
+
+## Correction — appended at session close (2026-07-18)
+
+*Appended per the never-rewrite convention; adds, does not edit.*
+
+Session 5 delivered one item beyond the list above, decided after this summary was
+committed: T was tagged `v1.0.0` at its current HEAD — the toolchain frozen as of the
+program's conclusion — and R's README now links the tag alongside `main`. Recorded as a
+mid-session scope amendment in the Session 5 journal; closure work, in the S4 amendment's
+mold.
